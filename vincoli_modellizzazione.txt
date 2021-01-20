@@ -1,0 +1,40 @@
+Vincoli e Modellizzazione del problema
+
+vincoli
+- il robot puo' compiere solo un passo o un atto di pulire a turno
+- il robot si puo muovere solo tra stanze adiacenti
+- le stanze very dirty(V) dopo un azione di clean saranno trasformate in stanze dirty(D)
+    e solo dopo una seconda operazione di cleaning saranno trasformate in stanze clean(C)
+- lo stato iniziale e lo stato finale possono essere una qualsiasi combinazione della matrice
+    e della posizione del robot (inizialmente con n fisso ?)
+
+
+verranno quindi date in input due immagini 
+    . stato iniziale celle -> conterra solo le lettere (C, X, V, D)
+    . stato finale del sistema -> conterra la posizione di partenza e di terminazione
+        del robot, si assumono queste celle dover essere clean nello stato finale
+
+
+codifica
+    - gli stati (configurazione delle stanze al passo t) verranno rappresentati tramite
+    una stringa di NxN caratteri un ';' N un ';' ed un valore numerico (0<=i<=N^2-1)
+    es: "CDCX...XDVC;5;14"
+
+
+    - le azioni sono le seguenti:
+        . muovi alto (+1 sulla x)
+        . muovi basso (-1 sulla x)
+        . muovi destra (+1 sulla y)
+        . muovi sinistra (-1 sulla y)
+
+    - da qualsiasi stato sara' possibile usare le azioni appena descritte.
+    ovviamente se ci si muove verso una cella X o fuori dalla griglia lo 
+    stato risultante sara' uguale a quello definito prima dell'azione.
+    Non implichiamo intelligenza intrinseca nella scelta delle azioni,
+    sara l'euristica ad aiutarci ad evitare passi ridondanti.
+
+EURISTICA
+    .h1(n) = distanza di manhattan dalla posizione attuale alla posizione finale +
+    #stanze-D + 2*#stanze-V
+
+    si accettano altre euristiche, attenti all correttezza e ammissibilita'.
