@@ -25,10 +25,10 @@ jobs:
 
           pipenv install
 
-          pipenv run python test_dvc.py
+          pipenv run python train.py
 
           # Write your CML report
-          cat metrics.txt >> report.md
-          # cml-publish confusion_matrix.png --md >> report.md
+          cml-publish accuracy_graphic.png --md >> report.md
+          cml-publish loss_graphic.png --md >> report.md
           cml-send-comment report.md
           cml-send-github-check report.md
