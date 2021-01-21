@@ -17,9 +17,8 @@ verranno quindi date in input due immagini
 
 codifica
     - gli stati (configurazione delle stanze al passo t) verranno rappresentati tramite
-    una stringa di NxN caratteri un ';' N un ';' ed un valore numerico (0<=i<=N^2-1)
-    es: "CDCX...XDVC;5;14"
-
+    un oggetto python che rappresentera' le singole celle della matrice della stanza, la dimensione,
+    e la posizione del robot.
 
     - le azioni sono le seguenti:
         . muovi alto (+1 sulla x)
@@ -35,6 +34,6 @@ codifica
 
 EURISTICA
     .h1(n) = distanza di manhattan dalla posizione attuale alla posizione finale +
-    #stanze-D + 2*#stanze-V
+    #(stanze-D_attuale - stanze-D_goal) + 2*#(stanze-V_attuale - stanze-V_goal)
 
     si accettano altre euristiche, attenti all correttezza e ammissibilita'.
