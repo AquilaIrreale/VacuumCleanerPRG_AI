@@ -128,3 +128,7 @@ dmypy.json
 # Pyre type checker
 .pyre/
 /dataset
+
+# Other
+accuracy_chart.png
+loss_chart.png
