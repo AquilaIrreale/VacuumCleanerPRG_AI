@@ -1,0 +1,34 @@
+name: your-workflow-name
+on: [push]
+jobs:
+  run:
+    runs-on: [ubuntu-latest]
+    container: docker://dvcorg/cml-py3:latest
+    strategy:
+      matrix:
+        python:
+          - 3.8
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8' # Version range or exact version of a Python version to use, using SemVer's version range syntax
+      - uses: dschep/install-pipenv-action@v1
+
+      - name: checkout
+        env:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          GDRIVE_CREDENTIALS_DATA: ${{ secrets.GDRIVE_CREDENTIALS_DATA }}
+        run: |
+          dvc pull -r myremote
+
+          pipenv install
+
+          pipenv run python test_dvc.py
+
+          # Write your CML report
+          cat metrics.txt >> report.md
+          # cml-publish confusion_matrix.png --md >> report.md
+          cml-send-comment report.md
+          cml-send-github-check report.md
