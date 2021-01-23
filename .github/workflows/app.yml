@@ -15,19 +15,26 @@ jobs:
         with:
           python-version: '3.8' # Version range or exact version of a Python version to use, using SemVer's version range syntax
       - uses: dschep/install-pipenv-action@v1
-      - uses: Dovyski/setup-opencv-action@v1
-        with:
-          opencv-version: '4.5.2'
-      - name: checkout
+      - name: Install graphic libraries
+        run: |
+          sudo apt update
+          sudo apt install libgl1-mesa-dev
+      - name: Install dependencies from Pipfile.lock
+        run: |
+          pipenv sync --dev
+      - name: Pull dataset
         env:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
           GDRIVE_CREDENTIALS_DATA: ${{ secrets.GDRIVE_CREDENTIALS_DATA }}
         run: |
-          dvc pull -r myremote
-          pipenv sync
+          pipenv run dvc pull -r myremote
+      - name: Run training
+        run: |
           pipenv run python vision.py train
-          # Write CML report
-          cml-publish accuracy_graphic.png --md >> report.md
-          cml-publish loss_graphic.png --md >> report.md
+      - name: Generate report
+        env:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cml-publish accuracy_chart.png --md >> report.md
+          cml-publish loss_chart.png --md >> report.md
           cml-send-comment report.md
           cml-send-github-check report.md
