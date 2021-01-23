@@ -72,7 +72,6 @@ class LetterRecognizerNN:
     def __init__(self, model_path=None):
         if model_path is not None:
             self.model = keras.models.load_model(model_path)
-            self.model.summary()
         else:
             self.model = keras.Sequential()
             self.model.add(layers.Dense(512, activation="relu", input_shape=(784,)))
@@ -80,8 +79,8 @@ class LetterRecognizerNN:
             self.model.add(layers.Dense(256, activation="relu"))
             self.model.add(layers.Dropout(0.3))
             self.model.add(layers.Dense(6, activation="softmax"))
-            self.model.summary()
             self.model.compile(loss="sparse_categorical_crossentropy", optimizer="adam", metrics=["accuracy"])
+        self.model.summary()
 
     def train(self, model_path=None, batch_size=128, epochs=15):
         with gzip.open(self.data_dir/"training.csv.gz") as f:
@@ -99,10 +98,6 @@ class LetterRecognizerNN:
 
         if model_path is not None:
             self.model.save(model_path)
-
-        #image = cv2.imread("Untitled2.png")
-        #image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        #image = (255 - image)/255
 
         score = self.model.evaluate(test_imgs, test_labels, verbose=0)
         print("Test loss:", score[0])
@@ -125,7 +120,6 @@ class LetterRecognizerNN:
         plt.savefig("loss_chart.png")
 
     def predict(self, image):
-        breakpoint()
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         image = cv2.resize(image, (28, 28))
         image = (255-image.flatten()) / 255
