@@ -66,6 +66,25 @@ def read_board(file):
     return cnts.reshape((len(cnts)//i, i, *cnts.shape[1:]))
 
 
+def trim_to_content(image):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    _, thresh = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
+    contours, hierarchy = cv2.findContours(255-thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnt = contours[0]
+    x, y, w, h = cv2.boundingRect(cnt)
+    return image[y:y+h, x:x+w]
+
+
+def frame_in_square(image):
+    h, w = image.shape[:2]
+    side = max(h, w) * 115 // 100
+    x = (side-w) // 2
+    y = (side-h) // 2
+    ret_image = np.full((side, side, *image.shape[2:]), 255, dtype=np.uint8)
+    ret_image[y:y+h, x:x+w] = image
+    return ret_image
+
+
 class LetterRecognizerNN:
     data_dir = Path(__file__).resolve().parent/"dataset"
 
@@ -136,7 +155,9 @@ def predict_board(board_image):
 
     return np.array([
         np.array([
-            predict_board_nn.predict(image)
+            predict_board_nn.predict(
+                frame_in_square(
+                    trim_to_content(image)))
             for image in row])
         for row in board])
 
