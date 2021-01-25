@@ -1,93 +1,28 @@
+import os
 import sys
 import gzip
+import math
 import random
 from pathlib import Path
+
+from statistics import mean
+from operator import itemgetter
+from itertools import product
 
 import cv2
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+os.environ["KMP_AFFINITY"] = "noverbose"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 from tensorflow import keras
 from tensorflow.keras import layers
-
-
-CONTOUR_MAX_SIZE = 1000
-CONTOUR_MAX_SIZE_2 = 50000
-
-
-def read_board(file):
-    # Load image, grayscale, and adaptive threshold
-    image = cv2.imread(file)
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    thresh_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 57, 5)
-
-    # Filter out all numbers and noise to isolate only boxes
-    cnts, _ = cv2.findContours(thresh_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    cv2.drawContours(
-            thresh_image,
-            [c for c in cnts if cv2.contourArea(c) < CONTOUR_MAX_SIZE],
-            -1, (0, 0, 0), -1)
-
-    # Fix horizontal and vertical lines
-    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 5))
-    thresh_image = cv2.morphologyEx(thresh_image, cv2.MORPH_CLOSE, vertical_kernel, iterations=9)
-
-    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 1))
-    thresh_image = cv2.morphologyEx(thresh_image, cv2.MORPH_CLOSE, horizontal_kernel, iterations=4)
-
-    # Sort by top to bottom and each row by left to right
-    invert = 255 - thresh_image
-
-    cnts, _ = cv2.findContours(invert, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    # https://answers.opencv.org/question/179510/how-can-i-sort-the-contours-from-left-to-right-and-top-to-bottom/
-    # TODO: improve
-    def contours_key(c):
-        x, y, w, h = cv2.boundingRect(c)
-        imw, imh, depth = image.shape
-        return x**(3/2) + y*imw
-
-    cnts = np.array([c for c in sorted(cnts, key=contours_key)
-                        if cv2.contourArea(c) < CONTOUR_MAX_SIZE_2])
-
-    rightmost_x = 0
-    for i, c in enumerate(cnts):
-        x, y, w, h = cv2.boundingRect(c)
-        if x < rightmost_x:
-            break
-        rightmost_x = x
-    ncols = i
-
-    # Find bounding box and extract ROI
-    def trim_by_contour(c):
-        x, y, w, h = cv2.boundingRect(c)
-        return image[y:y+h, x:x+w]
-
-    cnts = np.array([trim_by_contour(c) for c in cnts])
-    return cnts.reshape((len(cnts)//i, i, *cnts.shape[1:]))
-
-
-def trim_to_content(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
-    contours, hierarchy = cv2.findContours(255-thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cnt = contours[0]
-    x, y, w, h = cv2.boundingRect(cnt)
-    return image[y:y+h, x:x+w]
-
-
-def frame_in_square(image):
-    h, w = image.shape[:2]
-    side = max(h, w) * 115 // 100
-    x = (side-w) // 2
-    y = (side-h) // 2
-    ret_image = np.full((side, side, *image.shape[2:]), 255, dtype=np.uint8)
-    ret_image[y:y+h, x:x+w] = image
-    return ret_image
+from sklearn.cluster import DBSCAN
 
 
 class LetterRecognizerNN:
-    data_dir = Path(__file__).resolve().parent/"dataset"
-
     def __init__(self, model_path=None):
         if model_path is not None:
             self.model = keras.models.load_model(model_path)
@@ -98,14 +33,19 @@ class LetterRecognizerNN:
             self.model.add(layers.Dense(256, activation="relu"))
             self.model.add(layers.Dropout(0.3))
             self.model.add(layers.Dense(6, activation="softmax"))
-            self.model.compile(loss="sparse_categorical_crossentropy", optimizer="adam", metrics=["accuracy"])
+            self.model.compile(
+                    loss="sparse_categorical_crossentropy",
+                    optimizer="adam",
+                    metrics=["accuracy"])
         self.model.summary()
 
-    def train(self, model_path=None, batch_size=128, epochs=15):
-        with gzip.open(self.data_dir/"training.csv.gz") as f:
+    def train(self, dataset_path, model_path=None, batch_size=128, epochs=15):
+        dataset_path = Path(dataset_path)
+
+        with gzip.open(dataset_path/"training.csv.gz") as f:
             train = np.genfromtxt(f, delimiter=",")
 
-        with gzip.open(self.data_dir/"testing.csv.gz") as f:
+        with gzip.open(dataset_path/"testing.csv.gz") as f:
             test = np.genfromtxt(f, delimiter=",")
 
         train_imgs = train[:, 1:]/255
@@ -113,7 +53,12 @@ class LetterRecognizerNN:
         test_imgs = test[:, 1:]/255
         test_labels = test[:, 0].astype(np.uint8)
 
-        history = self.model.fit(train_imgs, train_labels, batch_size=batch_size, epochs=epochs, validation_data=(test_imgs, test_labels))
+        history = self.model.fit(
+                train_imgs,
+                train_labels,
+                batch_size=batch_size,
+                epochs=epochs,
+                validation_data=(test_imgs, test_labels))
 
         if model_path is not None:
             self.model.save(model_path)
@@ -139,38 +84,314 @@ class LetterRecognizerNN:
         plt.savefig("loss_chart.png")
 
     def predict(self, image):
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        image = cv2.resize(image, (28, 28))
-        image = (255-image.flatten()) / 255
-        return np.argmax(self.model.predict(np.array([image])))
+        if len(image.shape) > 2:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        image = cv2.resize(image, (28, 28)).flatten() / 255
+        return np.argmax(
+                self.model.predict(
+                    np.array([image])))
 
 
-predict_board_nn = None
-def predict_board(board_image):
-    global predict_board_nn
-    if predict_board_nn is None:
-        predict_board_nn = LetterRecognizerNN("model")
+labels = {}
+with open("dataset/classes") as f:
+    for line in f:
+        cls, label = line.split()
+        labels[int(cls)] = label
 
-    board = read_board(board_image)
 
-    return np.array([
-        np.array([
-            predict_board_nn.predict(
-                frame_in_square(
-                    trim_to_content(image)))
-            for image in row])
-        for row in board])
+def adjacent_pairs(seq):
+    it = iter(seq)
+    first_val = next(it)
+    val1 = first_val
+    for val2 in it:
+        yield val1, val2
+        val1 = val2
+    yield val1, first_val
+
+
+debug_output = True
+def visualize(image):
+    if debug_output:
+        cv2.imshow("Vision2 image processing step", image)
+        cv2.waitKey(0)
+
+
+def square_kern(n):
+    return cv2.getStructuringElement(cv2.MORPH_RECT, (n, n))
+
+
+def rect_area(rect):
+    x, y, w, h = rect
+    return h*w
+
+
+def draw_line(image, line, color, thickness=1):
+    rho, theta = line
+    h, w, *_ = image.shape
+    if theta:
+        m = -1 / math.tan(theta);
+        q = rho / math.sin(theta);
+        return cv2.line(image, (0, int(q)), (w, int(m*w+q)), color, thickness)
+    else:
+        return cv2.line(image, (int(rho), 0), (int(rho), h), color, thickness)
+
+
+def mean_line(lines):
+    return np.apply_along_axis(mean, 0, np.array(lines))
+
+
+def mean_lines(lines):
+    model = DBSCAN(eps=8, min_samples=1)
+    model.fit(lines)
+
+    clusters = {}
+    for label, line in zip(model.labels_, lines):
+        clusters.setdefault(label, []).append(line)
+
+    mean_lines = []
+    for label, line_cluster in clusters.items():
+        mean_lines.append(mean_line(line_cluster))
+    return mean_lines
+
+
+def line_intersection(l1, l2):
+    rho1, theta1 = l1
+    rho2, theta2 = l2
+    ct1 = math.cos(theta1)
+    st1 = math.sin(theta1)
+    ct2 = math.cos(theta2)
+    st2 = math.sin(theta2)
+    det = ct1*st2 - st1*ct2
+    if det:
+        return (int((st2*rho1 - st1*rho2)/det),
+                int((-ct2*rho1 + ct1*rho2)/det))
+    else:
+        raise ValueError("l1 and l2 are parallel")
+
+
+def point_distance(p1, p2):
+    x1, y1 = p1
+    x2, y2 = p2
+    return math.sqrt((x1-x2)**2 + (y1-y2)**2)
+
+
+def distance_from_border(image, point):
+    x, y = point
+    h, w, *_ = image.shape
+    return min(x, w-x-1, y, h-y-1)
+
+
+def largest_blob(image):
+    h, w = image.shape
+    search_image = cv2.bitwise_and(image, 64)
+    visualize(search_image)
+    best_area = 0
+    largest_blob = None
+    for y, x in product(range(h), range(w)):
+        if not search_image[y, x]:
+            continue
+        area, filled, _, _ = cv2.floodFill(search_image, None, (x, y), 255)
+        visualize(filled)
+        if area > best_area:
+            best_area = area
+            largest_blob = np.copy(filled)
+        _, search_image, _, _ = cv2.floodFill(search_image, None, (x, y), 0)
+    _, largest_blob = cv2.threshold(largest_blob, 127, 255, cv2.THRESH_BINARY)
+    return largest_blob
+
+
+def score_blob(image, blob_color=255):
+    h, w, *_ = image.shape
+    return sum(
+            distance_from_border(image, (x, y))
+            for y, x in product(range(h), range(w))
+            if image[y, x] == blob_color)
+
+
+def main_blob(image):
+    h, w, *_ = image.shape
+    min_area = (min(h, w)//10)**2
+    image = cv2.bitwise_and(image, 64)
+    best_blob = None
+    best_score = 0
+    for y, x in product(range(h), range(w)):
+        if not image[y, x]:
+            continue
+        area, _, _, _ = cv2.floodFill(image, None, (x, y), 255)
+        if area > min_area:
+            visualize(image)
+            blob_score = score_blob(image, blob_color=255)
+            if blob_score > best_score:
+                best_score = blob_score
+                _, best_blob = cv2.threshold(image, 127, 255, cv2.THRESH_BINARY)
+        cv2.floodFill(image, None, (x, y), 0)
+    return best_blob
+
+
+def trim(image, relative_size):
+    h, w, *_ = image.shape
+    offset = int(min(h, w) * relative_size)
+    return image[offset:h-offset, offset:w-offset]
+
+
+def trim_to_content(image):
+    h, w, *_ = image.shape
+    x, y = w, h
+    contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    x, y, w, h = cv2.boundingRect(np.concatenate(contours))
+    return image[y:y+h, x:x+w]
+
+
+def frame(image, relative_size):
+    h, w, *_ = image.shape
+    side = int(max(h, w) * relative_size)
+    x = (side-w) // 2
+    y = (side-h) // 2
+    ret_image = np.zeros((side, side), dtype=image.dtype)
+    ret_image[y:y+h, x:x+w] = image
+    return ret_image
+
+
+def smooth_out(image):
+    image = cv2.pyrUp(image)
+    for i in range(4):
+        image = cv2.medianBlur(image, 7)
+    image = cv2.pyrDown(image)
+    _, image = cv2.threshold(image, 64, 255, cv2.THRESH_BINARY)
+    image = cv2.medianBlur(image, 5)
+    return image
+
+
+def read_board(file, model):
+    image = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+    visualize(image)
+    image = cv2.GaussianBlur(image, (11, 11), 0)
+    visualize(image)
+    image = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 5, 4)
+    visualize(image)
+    image = 255-image
+    visualize(image)
+    image = cv2.morphologyEx(image, cv2.MORPH_CLOSE, square_kern(6))
+    visualize(image)
+    image = cv2.morphologyEx(image, cv2.MORPH_OPEN, square_kern(2))
+    visualize(image)
+
+    contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    figure = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    figure = cv2.drawContours(figure, contours, -1, (255, 0, 0), 3)
+    visualize(figure)
+
+    x, y, w, h = max((cv2.boundingRect(c) for c in contours), key=rect_area)
+    figure = cv2.rectangle(figure, (x, y), (x+w, y+h), (0, 0, 255), 3)
+    visualize(figure)
+
+    image = image[y:y+h, x:x+w]
+    visualize(image)
+
+    grid = largest_blob(image)
+    visualize(grid)
+
+    lines = cv2.HoughLines(grid, 1, np.pi/180, 150)
+    lines = lines[:, 0, :]
+    figure = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    for line in lines:
+        figure = draw_line(figure, line, (0, 0, 255))
+    visualize(figure)
+
+    lines = mean_lines(lines)
+    figure = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    for line in lines:
+        figure = draw_line(figure, line, (0, 0, 255), 3)
+    visualize(figure)
+
+    horizontal_lines = []
+    vertical_lines = []
+    for line in lines:
+        rho, theta = line
+        if np.pi/4 <= theta < np.pi*3/4:
+            horizontal_lines.append(line)
+        else:
+            vertical_lines.append(line)
+
+    m = len(vertical_lines) - 1
+    n = len(horizontal_lines) - 1
+    print(f"Shape detected {n}x{m}")
+    print()
+
+    left_line   = max(vertical_lines,   key=itemgetter(0))
+    right_line  = min(vertical_lines,   key=itemgetter(0))
+    top_line    = min(horizontal_lines, key=itemgetter(0))
+    bottom_line = max(horizontal_lines, key=itemgetter(0))
+
+    lines = [top_line, left_line, bottom_line, right_line]
+    for line in lines:
+        figure = draw_line(figure, line, (255, 0, 0), 3)
+    visualize(figure)
+
+    intersections = [line_intersection(l1, l2) for l1, l2 in adjacent_pairs(lines)]
+    for x, y in intersections:
+        cv2.circle(figure, (x, y), 9, (0, 255, 0), -1)
+    visualize(figure)
+
+    top_left, bottom_left, bottom_right, top_right = intersections
+    w = int(max(point_distance(p1, p2) for p1, p2 in ((top_left, top_right), (bottom_left, bottom_right))))
+    h = int(max(point_distance(p1, p2) for p1, p2 in ((top_left, bottom_left), (top_right, bottom_right))))
+
+    src = np.array(intersections, dtype=np.float32)
+    dst = np.array([[0, 0], [0, h-1], [w-1, h-1], [w-1, 0]], dtype=np.float32)
+    transform_matrix = cv2.getPerspectiveTransform(src, dst)
+    image = cv2.warpPerspective(image, transform_matrix, (w, h), flags=cv2.INTER_NEAREST)
+    visualize(image)
+
+    image = cv2.morphologyEx(image, cv2.MORPH_CLOSE, square_kern(6))
+    visualize(image)
+
+    classes = np.zeros((n, m), dtype=np.uint8)
+
+    cell_h = h//n
+    cell_w = w//m
+    for i, j in product(range(n), range(m)):
+        cell_y = i*cell_h
+        cell_x = j*cell_w
+        cell = image[
+                cell_y:cell_y+cell_h,
+                cell_x:cell_x+cell_w]
+        visualize(cell)
+        letter = main_blob(cell)
+        figure = cv2.cvtColor(cell, cv2.COLOR_GRAY2BGR)
+        figure[letter == 255] = (0, 0, 255)
+        visualize(figure)
+        letter = trim_to_content(letter)
+        visualize(letter)
+        letter = frame(letter, 1.5)
+        visualize(letter)
+        letter = smooth_out(letter)
+        visualize(letter)
+        classes[i, j] = model.predict(letter)
+
+    return classes
 
 
 if __name__ == "__main__":
     program, command, *args = sys.argv
     if command == "train":
         nn = LetterRecognizerNN()
-        nn.train(*args[:1])
-    elif command == "predict":
-        nn = LetterRecognizerNN(args[0])
-        print(nn.predict(cv2.imread(args[1])))
-    elif command == "predict-board":
-        board = predict_board(args[0])
-        for row in board:
-            print(" ".join(map(str, row)))
+        nn.train(args[0], *args[:1])
+        sys.exit(0)
+
+    print("Loading model...")
+    print()
+    nn = LetterRecognizerNN(args[0])
+    print()
+
+    if command == "predict":
+        print(labels[nn.predict(cv2.imread(args[1]))])
+
+    elif command == "read-board":
+        classes = read_board(args[1], nn)
+        n, m = classes.shape
+        print(f"{'+---'*m}+")
+        for row in classes:
+            print(f"| {' | '.join(labels[c] for c in row)} |")
+            print(f"{'+---'*m}+")
+        print()
