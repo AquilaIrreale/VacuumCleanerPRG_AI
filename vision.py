@@ -3,6 +3,7 @@ import sys
 import gzip
 import math
 import random
+from io import BytesIO
 from pathlib import Path
 
 from statistics import mean
@@ -113,7 +114,12 @@ debug_output = True
 def visualize(image):
     if debug_output:
         cv2.imshow("Vision2 image processing step", image)
-        cv2.waitKey(0)
+        while True:
+            key = cv2.waitKey(0)
+            if key in (ord("q"), 27):
+                sys.exit(0)
+            elif key == ord("\r"):
+                return
 
 
 def square_kern(n):
@@ -136,6 +142,25 @@ def draw_line(image, line, color, thickness=1):
         return cv2.line(image, (int(rho), 0), (int(rho), h), color, thickness)
 
 
+def plt_fig_to_image(fig, dpi=72):
+    with BytesIO() as buf:
+        fig.savefig(buf, format="png", dpi=dpi)
+        buf.seek(0)
+        image = np.frombuffer(buf.getvalue(), dtype=np.uint8)
+    return cv2.imdecode(image, 1)
+
+
+def scatter_plot(xlabel, ylabel, *points):
+    fig, ax = plt.subplots()
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    for ps in points:
+        ps = np.array(ps)
+        xs, ys = ps.T
+        ax.scatter(xs, ys, s=16, marker=".")
+    return plt_fig_to_image(fig)
+
+
 def mean_line(lines):
     return np.apply_along_axis(mean, 0, np.array(lines))
 
@@ -147,6 +172,8 @@ def mean_lines(lines):
     clusters = {}
     for label, line in zip(model.labels_, lines):
         clusters.setdefault(label, []).append(line)
+
+    visualize(scatter_plot("Rho", "Theta", *clusters.values()))
 
     mean_lines = []
     for label, line_cluster in clusters.items():
@@ -297,6 +324,8 @@ def read_board(file, model):
     for line in lines:
         figure = draw_line(figure, line, (0, 0, 255))
     visualize(figure)
+
+    visualize(scatter_plot("Rho", "Theta", lines))
 
     lines = mean_lines(lines)
     figure = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
