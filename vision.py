@@ -3,12 +3,13 @@ import sys
 import gzip
 import math
 import random
+
 from io import BytesIO
 from pathlib import Path
-
 from statistics import mean
 from operator import itemgetter
 from itertools import product
+from contextlib import suppress
 
 import cv2
 import numpy as np
@@ -132,17 +133,22 @@ def rect_area(rect):
 
 
 def draw_line(image, line, color, thickness=1):
-    rho, theta = line
     h, w, *_ = image.shape
-    if theta:
-        m = -1 / math.tan(theta);
-        q = rho / math.sin(theta);
-        return cv2.line(image, (0, int(q)), (w, int(m*w+q)), color, thickness)
+    rho, theta = line
+    a = math.cos(theta)
+    b = math.sin(theta)
+
+    if np.pi/4 <= theta < np.pi*3/4:
+        p1 = 0, round(rho/b)
+        p2 = w, round((rho - w*a)/b)
     else:
-        return cv2.line(image, (int(rho), 0), (int(rho), h), color, thickness)
+        p1 = round(rho/a), 0
+        p2 = round((rho - h*b)/a), h
+
+    return cv2.line(image, p1, p2, color, thickness)
 
 
-def plt_fig_to_image(fig, dpi=72):
+def plt_fig_to_image(fig, dpi=90):
     with BytesIO() as buf:
         fig.savefig(buf, format="png", dpi=dpi)
         buf.seek(0)
@@ -150,15 +156,17 @@ def plt_fig_to_image(fig, dpi=72):
     return cv2.imdecode(image, 1)
 
 
-def scatter_plot(xlabel, ylabel, *points):
+def scatter_plot(title, xlabel, ylabel, *points, big=False):
     fig, ax = plt.subplots()
+    ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     for ps in points:
         ps = np.array(ps)
         xs, ys = ps.T
-        ax.scatter(xs, ys, s=16, marker=".")
-    return plt_fig_to_image(fig)
+        size = 128 if big else 16
+        ax.scatter(xs, ys, s=size, marker=".")
+    visualize(plt_fig_to_image(fig))
 
 
 def mean_line(lines):
@@ -166,18 +174,49 @@ def mean_line(lines):
 
 
 def mean_lines(lines):
-    model = DBSCAN(eps=8, min_samples=1)
-    model.fit(lines)
+    scatter_plot(
+            "Raw Hough transform data",
+            "Rho", "Theta", lines)
+    lines = np.array(lines)
+    for i, (rho, theta) in enumerate(lines):
+        if theta > np.pi*3/4:
+            lines[i] = -rho, theta-np.pi
+
+    scatter_plot(
+            "Rectified Hough transform data",
+            "Rho", "Theta", lines)
+
+    rhos, thetas = lines.T
+    scale = abs(min(rhos)-max(rhos))/np.pi
+    scaled_lines = np.column_stack((rhos, thetas*scale))
+
+    scatter_plot(
+            "Scaled rectified Hough transform data",
+            "Rho", "Theta", scaled_lines)
+
+    model = DBSCAN(eps=16, min_samples=1)
+    model.fit(scaled_lines)
 
     clusters = {}
     for label, line in zip(model.labels_, lines):
         clusters.setdefault(label, []).append(line)
 
-    visualize(scatter_plot("Rho", "Theta", *clusters.values()))
+    scatter_plot(
+            "DBSCAN clustered Hough transform data",
+            "Rho", "Theta", *clusters.values())
 
     mean_lines = []
     for label, line_cluster in clusters.items():
         mean_lines.append(mean_line(line_cluster))
+
+    scatter_plot(
+            "Per-cluster mean of Hough transform data",
+            "Rho", "Theta", *map(list, mean_lines), big=True)
+
+    for i, (rho, theta) in enumerate(mean_lines):
+        if theta < 0:
+            mean_lines[i] = -rho, theta+np.pi
+
     return mean_lines
 
 
@@ -246,7 +285,6 @@ def main_blob(image):
             continue
         area, _, _, _ = cv2.floodFill(image, None, (x, y), 255)
         if area > min_area:
-            visualize(image)
             blob_score = score_blob(image, blob_color=255)
             if blob_score > best_score:
                 best_score = blob_score
@@ -325,8 +363,6 @@ def read_board(file, model):
         figure = draw_line(figure, line, (0, 0, 255))
     visualize(figure)
 
-    visualize(scatter_plot("Rho", "Theta", lines))
-
     lines = mean_lines(lines)
     figure = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     for line in lines:
@@ -347,10 +383,11 @@ def read_board(file, model):
     print(f"Shape detected {n}x{m}")
     print()
 
-    left_line   = max(vertical_lines,   key=itemgetter(0))
-    right_line  = min(vertical_lines,   key=itemgetter(0))
-    top_line    = min(horizontal_lines, key=itemgetter(0))
-    bottom_line = max(horizontal_lines, key=itemgetter(0))
+    key = lambda x: math.fabs(x[0])
+    left_line   = min(vertical_lines,   key=key)
+    right_line  = max(vertical_lines,   key=key)
+    top_line    = min(horizontal_lines, key=key)
+    bottom_line = max(horizontal_lines, key=key)
 
     lines = [top_line, left_line, bottom_line, right_line]
     for line in lines:
