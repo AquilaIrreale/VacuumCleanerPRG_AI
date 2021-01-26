@@ -94,13 +94,6 @@ class LetterRecognizerNN:
                     np.array([image])))
 
 
-labels = {}
-with open("dataset/classes") as f:
-    for line in f:
-        cls, label = line.split()
-        labels[int(cls)] = label
-
-
 def adjacent_pairs(seq):
     it = iter(seq)
     first_val = next(it)
@@ -293,12 +286,6 @@ def main_blob(image):
     return best_blob
 
 
-def trim(image, relative_size):
-    h, w, *_ = image.shape
-    offset = int(min(h, w) * relative_size)
-    return image[offset:h-offset, offset:w-offset]
-
-
 def trim_to_content(image):
     h, w, *_ = image.shape
     x, y = w, h
@@ -444,6 +431,12 @@ if __name__ == "__main__":
         nn = LetterRecognizerNN()
         nn.train(args[0], *args[:1])
         sys.exit(0)
+
+    labels = {}
+    with open("dataset/classes") as f:
+        for line in f:
+            cls, label = line.split()
+            labels[int(cls)] = label
 
     print("Loading model...")
     print()
