@@ -317,12 +317,26 @@ def smooth_out(image):
     return image
 
 
+def brightness_contrast(image, alpha, beta):
+    image = image.astype(np.float32)
+    return np.clip(image*alpha + beta, 0, 255).astype(np.uint8)
+
+
+def gamma_correction(image, gamma):
+    lookup_table = np.arange(256).reshape((1, 256))
+    lookup_table = np.clip((lookup_table/255)**gamma * 255, 0, 255)
+    lookup_table = lookup_table.astype(np.uint8)
+    return cv2.LUT(image, lookup_table)
+
+
 def read_board(file, model):
     image = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
     visualize(image)
+    image = brightness_contrast(image, 3, -128)
+    visualize(image)
     image = cv2.GaussianBlur(image, (11, 11), 0)
     visualize(image)
-    image = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 5, 4)
+    image = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 9, 5)
     visualize(image)
     image = 255-image
     visualize(image)
