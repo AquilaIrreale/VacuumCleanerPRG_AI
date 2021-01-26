@@ -3,6 +3,7 @@ import sys
 import gzip
 import math
 import random
+import shutil
 
 from io import BytesIO
 from pathlib import Path
@@ -43,6 +44,7 @@ class LetterRecognizerNN:
 
     def train(self, dataset_path, model_path=None, batch_size=128, epochs=15):
         dataset_path = Path(dataset_path)
+        model_path = Path(model_path)
 
         with gzip.open(dataset_path/"training.csv.gz") as f:
             train = np.genfromtxt(f, delimiter=",")
@@ -64,6 +66,7 @@ class LetterRecognizerNN:
 
         if model_path is not None:
             self.model.save(model_path)
+            shutil.copy(dataset_path/"classes", model_path/"classes")
 
         score = self.model.evaluate(test_imgs, test_labels, verbose=0)
         print("Test loss:", score[0])
@@ -429,25 +432,27 @@ if __name__ == "__main__":
     program, command, *args = sys.argv
     if command == "train":
         nn = LetterRecognizerNN()
-        nn.train(args[0], *args[:1])
+        nn.train(args[0], *args[1:2])
         sys.exit(0)
 
+    model_path, image_file = args
+    model_path = Path(model_path)
     labels = {}
-    with open("dataset/classes") as f:
+    with open(model_path/"classes") as f:
         for line in f:
             cls, label = line.split()
             labels[int(cls)] = label
 
     print("Loading model...")
     print()
-    nn = LetterRecognizerNN(args[0])
+    nn = LetterRecognizerNN(model_path)
     print()
 
     if command == "predict":
-        print(labels[nn.predict(cv2.imread(args[1]))])
+        print(labels[nn.predict(cv2.imread(image_file))])
 
     elif command == "read-board":
-        classes = read_board(args[1], nn)
+        classes = read_board(image_file, nn)
         n, m = classes.shape
         print(f"{'+---'*m}+")
         for row in classes:
