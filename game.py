@@ -1,9 +1,21 @@
-from collections import namedtuple
-
+from collections import deque
 import numpy as np
 
 
-State = namedtuple("State", ("pos", "dirt"))
+class State:
+    def __init__(self, pos, dirt):
+        self.pos = pos
+        self.dirt = np.copy(dirt)
+        self.dirt.flags.writeable = False
+
+    def __eq__(self, other):
+        return self.pos == other.pos and np.array_equal(self.dirt, other.dirt)
+
+    def __hash__(self):
+        return hash((self.pos, self.dirt.shape, bytes(self.dirt.data)))
+
+    def __repr__(self):
+        return f"State({self.pos!r}, {self.dirt!r})"
 
 
 def parse_board(classes_file, board):
@@ -62,7 +74,7 @@ def moves(board_layout, state):
     x, y = state.pos
 
     if state.dirt[y, x]:
-        new_dirt = state.dirt[:]
+        new_dirt = np.copy(state.dirt)
         new_dirt[y, x] -= 1
         yield "Clean", State((x, y), new_dirt)
 
@@ -78,6 +90,59 @@ def moves(board_layout, state):
             yield move, State((new_x, new_y), state.dirt)
 
 
+def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
+    if start_state == final_state:
+        return None, 0
+
+    visited = {}
+    frontier = deque()
+    frontier.append(start_state)
+    expanded = 1
+
+    while frontier:
+        state = frontier.pop() if lifo else frontier.popleft()
+        for move, dest_state in moves(board_layout, state):
+            if dest_state in visited or dest_state in frontier:
+                continue
+            frontier.append(dest_state)
+            expanded += 1
+            visited[dest_state] = move, state
+            if dest_state == final_state:
+                return visited, expanded
+
+    return None, expanded
+
+
+def print_board(layout, start_pos, final_pos, state):
+    h, w = layout.shape
+
+    print(f"+{'-'*(w*2)}+")
+    for y in range(h):
+        print('|', end="")
+        for x in range(w):
+            if not layout[y, x]:
+                print("[]", end="")
+                continue
+
+            if (x, y) == start_pos:
+                cell = "S"
+            elif (x, y) == final_pos:
+                cell = "F"
+            elif state.dirt[y, x] == 2:
+                cell = "V"
+            elif state.dirt[y, x] == 1:
+                cell = "D"
+            else:
+                cell = " "
+
+            if state.pos == (x, y):
+                print(f"{cell}*", end="")
+            else:
+                print(cell*2, end="")
+        print('|')
+    print(f"+{'-'*(w*2)}+")
+
+
 def test():
     board = np.array([ # TODO: get from vision
         [0, 1, 2],
@@ -88,11 +153,29 @@ def test():
     start_state = State(start_pos, dirt)
     final_state = State(final_pos, dirt*0)
 
-    print(layout)
-    print(start_state)
-    print(final_state)
+    visited, expanded = uninformed_graph_search(layout, start_state, final_state)
 
-    print(list(moves(layout, start_state)))
+    if visited is None:
+        print("No solution found!")
+        return
+
+    path = []
+    state = final_state
+    while state != start_state:
+        move, prev_state = visited[state]
+        path.append((state, move))
+        state = prev_state
+    path.append((state, None))
+    path.reverse()
+
+    for state, move in path:
+        if move is not None:
+            print()
+            print(move)
+        print_board(layout, start_pos, final_pos, state)
+
+    print()
+    print(f"Nodes expanded: {expanded}")
 
 
 if __name__ == "__main__":
