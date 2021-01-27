@@ -165,6 +165,15 @@ def scatter_plot(title, xlabel, ylabel, *points, big=False):
     visualize(plt_fig_to_image(fig))
 
 
+def histogram(title, image, *vlines):
+    fig, ax = plt.subplots()
+    ax.set_title(title)
+    ax.hist(image.flatten(), 256, (0, 256), color="black")
+    for x in vlines:
+        ax.axvline(x, color="red")
+    visualize(plt_fig_to_image(fig))
+
+
 def mean_line(lines):
     return np.apply_along_axis(mean, 0, np.array(lines))
 
@@ -317,7 +326,7 @@ def smooth_out(image):
     return image
 
 
-def brightness_contrast(image, alpha, beta):
+def alpha_beta_correction(image, alpha, beta):
     image = image.astype(np.float32)
     return np.clip(image*alpha + beta, 0, 255).astype(np.uint8)
 
@@ -332,8 +341,15 @@ def gamma_correction(image, gamma):
 def read_board(file, model):
     image = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
     visualize(image)
-    image = brightness_contrast(image, 3, -128)
+    histogram("Original image histogram", image)
+    p01, p99 = np.quantile(image, (.01, .99))
+    histogram("Original image histogram with 1st and 99th percentiles", image, p01, p99)
+    alpha = 255/(p99-p01)
+    beta = -p01*alpha
+    image = alpha_beta_correction(image, alpha, beta)
+    histogram("Alpha-beta corrected image histogram", image)
     visualize(image)
+    image = cv2.GaussianBlur(image, (11, 11), 0)
     image = cv2.GaussianBlur(image, (11, 11), 0)
     visualize(image)
     image = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 9, 5)
