@@ -91,7 +91,9 @@ class LetterRecognizerNN:
     def predict(self, image):
         if len(image.shape) > 2:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        image = cv2.resize(image, (28, 28)).flatten() / 255
+        image = cv2.resize(image, (28, 28))
+        visualize("To neural network", image)
+        image = image.flatten() / 255
         return np.argmax(
                 self.model.predict(
                     np.array([image])))
