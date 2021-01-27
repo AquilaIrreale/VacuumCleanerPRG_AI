@@ -318,12 +318,10 @@ def frame(image, relative_size):
 
 
 def smooth_out(image):
-    image = cv2.pyrUp(image)
     for i in range(4):
-        image = cv2.medianBlur(image, 7)
-    image = cv2.pyrDown(image)
-    _, image = cv2.threshold(image, 64, 255, cv2.THRESH_BINARY)
-    image = cv2.medianBlur(image, 5)
+        image = cv2.medianBlur(image, 3)
+    image = cv2.pyrUp(image)
+    image = cv2.blur(image, (3, 3))
     return image
 
 
@@ -347,7 +345,8 @@ def read_board(file, model):
     histogram("Original image histogram with 1st and 99th percentiles", image, p01, p99)
     alpha = 255/(p99-p01)
     beta = -p01*alpha
-    image = alpha_beta_correction(image, alpha, beta)
+    corrected_image = alpha_beta_correction(image, alpha, beta)
+    image = corrected_image
     histogram("Alpha-beta corrected image histogram", image)
     visualize("Alpha-beta correction", image)
     image = cv2.GaussianBlur(image, (11, 11), 0)
@@ -372,6 +371,7 @@ def read_board(file, model):
     visualize("Main contour bounding box", figure)
 
     image = image[y:y+h, x:x+w]
+    corrected_image = corrected_image[y:y+h, x:x+w]
     visualize("Crop to main contour", image)
 
     grid = largest_blob(image)
@@ -427,11 +427,11 @@ def read_board(file, model):
     src = np.array(intersections, dtype=np.float32)
     dst = np.array([[0, 0], [0, h-1], [w-1, h-1], [w-1, 0]], dtype=np.float32)
     transform_matrix = cv2.getPerspectiveTransform(src, dst)
-    image = cv2.warpPerspective(image, transform_matrix, (w, h), flags=cv2.INTER_NEAREST)
-    visualize("Perspective correction", image)
+    image = cv2.warpPerspective(corrected_image, transform_matrix, (w, h), flags=cv2.INTER_LINEAR)
+    visualize("Perspective correction of original image", image)
 
-    image = cv2.morphologyEx(image, cv2.MORPH_CLOSE, square_kern(6))
-    visualize("Morphological closing", image)
+    #image = cv2.morphologyEx(image, cv2.MORPH_CLOSE, square_kern(6))
+    #visualize("Morphological closing", image)
 
     classes = np.zeros((n, m), dtype=np.uint8)
 
@@ -444,6 +444,14 @@ def read_board(file, model):
                 cell_y:cell_y+cell_h,
                 cell_x:cell_x+cell_w]
         visualize("Grid cell", cell)
+        cell = cv2.GaussianBlur(cell, (5, 5), 0)
+        visualize("Gaussian blur", cell)
+        value, cell = cv2.threshold(cell, 0, 255, cv2.THRESH_BINARY|cv2.THRESH_OTSU)
+        visualize(f"Otsu's threshold ({value})", cell)
+        cell = 255-cell
+        visualize("Invert", cell)
+        cell = cv2.morphologyEx(cell, cv2.MORPH_OPEN, square_kern(2))
+        visualize("Morphological opening", cell)
         letter = main_blob(cell)
         figure = cv2.cvtColor(cell, cv2.COLOR_GRAY2BGR)
         figure[letter == 255] = (0, 0, 255)
