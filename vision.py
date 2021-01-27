@@ -108,9 +108,10 @@ def adjacent_pairs(seq):
 
 
 debug_output = True
-def visualize(image):
+def visualize(title, image):
     if debug_output:
-        cv2.imshow("Vision2 image processing step", image)
+        cv2.imshow("visualize-window", image)
+        cv2.setWindowTitle("visualize-window", title)
         while True:
             key = cv2.waitKey(0)
             if key in (ord("q"), 27):
@@ -162,7 +163,7 @@ def scatter_plot(title, xlabel, ylabel, *points, big=False):
         xs, ys = ps.T
         size = 128 if big else 16
         ax.scatter(xs, ys, s=size, marker=".")
-    visualize(plt_fig_to_image(fig))
+    visualize(title, plt_fig_to_image(fig))
 
 
 def histogram(title, image, *vlines):
@@ -171,7 +172,7 @@ def histogram(title, image, *vlines):
     ax.hist(image.flatten(), 256, (0, 256), color="black")
     for x in vlines:
         ax.axvline(x, color="red")
-    visualize(plt_fig_to_image(fig))
+    visualize(title, plt_fig_to_image(fig))
 
 
 def mean_line(lines):
@@ -255,14 +256,14 @@ def distance_from_border(image, point):
 def largest_blob(image):
     h, w = image.shape
     search_image = cv2.bitwise_and(image, 64)
-    visualize(search_image)
+    visualize("Finding largest blob", search_image)
     best_area = 0
     largest_blob = None
     for y, x in product(range(h), range(w)):
         if not search_image[y, x]:
             continue
         area, filled, _, _ = cv2.floodFill(search_image, None, (x, y), 255)
-        visualize(filled)
+        visualize(f"Blob found at {(x, y)}", filled)
         if area > best_area:
             best_area = area
             largest_blob = np.copy(filled)
@@ -340,7 +341,7 @@ def gamma_correction(image, gamma):
 
 def read_board(file, model):
     image = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
-    visualize(image)
+    visualize("Original image", image)
     histogram("Original image histogram", image)
     p01, p99 = np.quantile(image, (.01, .99))
     histogram("Original image histogram with 1st and 99th percentiles", image, p01, p99)
@@ -348,46 +349,46 @@ def read_board(file, model):
     beta = -p01*alpha
     image = alpha_beta_correction(image, alpha, beta)
     histogram("Alpha-beta corrected image histogram", image)
-    visualize(image)
+    visualize("Alpha-beta correction", image)
     image = cv2.GaussianBlur(image, (11, 11), 0)
     image = cv2.GaussianBlur(image, (11, 11), 0)
-    visualize(image)
+    visualize("Double gaussian blur", image)
     image = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 9, 5)
-    visualize(image)
+    visualize("Adaptive threshold", image)
     image = 255-image
-    visualize(image)
+    visualize("Invert", image)
     image = cv2.morphologyEx(image, cv2.MORPH_CLOSE, square_kern(6))
-    visualize(image)
+    visualize("Morphological closing", image)
     image = cv2.morphologyEx(image, cv2.MORPH_OPEN, square_kern(2))
-    visualize(image)
+    visualize("Morphological opening", image)
 
     contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     figure = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     figure = cv2.drawContours(figure, contours, -1, (255, 0, 0), 3)
-    visualize(figure)
+    visualize("External contours", figure)
 
     x, y, w, h = max((cv2.boundingRect(c) for c in contours), key=rect_area)
     figure = cv2.rectangle(figure, (x, y), (x+w, y+h), (0, 0, 255), 3)
-    visualize(figure)
+    visualize("Main contour bounding box", figure)
 
     image = image[y:y+h, x:x+w]
-    visualize(image)
+    visualize("Crop to main contour", image)
 
     grid = largest_blob(image)
-    visualize(grid)
+    visualize("Largest blob (grid)", grid)
 
     lines = cv2.HoughLines(grid, 1, np.pi/180, 150)
     lines = lines[:, 0, :]
     figure = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     for line in lines:
         figure = draw_line(figure, line, (0, 0, 255))
-    visualize(figure)
+    visualize("Hough transform of grid", figure)
 
     lines = mean_lines(lines)
     figure = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     for line in lines:
         figure = draw_line(figure, line, (0, 0, 255), 3)
-    visualize(figure)
+    visualize("Clusterized mean Hough transform", figure)
 
     horizontal_lines = []
     vertical_lines = []
@@ -412,12 +413,12 @@ def read_board(file, model):
     lines = [top_line, left_line, bottom_line, right_line]
     for line in lines:
         figure = draw_line(figure, line, (255, 0, 0), 3)
-    visualize(figure)
+    visualize("Grid edge lines", figure)
 
     intersections = [line_intersection(l1, l2) for l1, l2 in adjacent_pairs(lines)]
     for x, y in intersections:
         cv2.circle(figure, (x, y), 9, (0, 255, 0), -1)
-    visualize(figure)
+    visualize("Grid corner points", figure)
 
     top_left, bottom_left, bottom_right, top_right = intersections
     w = int(max(point_distance(p1, p2) for p1, p2 in ((top_left, top_right), (bottom_left, bottom_right))))
@@ -427,10 +428,10 @@ def read_board(file, model):
     dst = np.array([[0, 0], [0, h-1], [w-1, h-1], [w-1, 0]], dtype=np.float32)
     transform_matrix = cv2.getPerspectiveTransform(src, dst)
     image = cv2.warpPerspective(image, transform_matrix, (w, h), flags=cv2.INTER_NEAREST)
-    visualize(image)
+    visualize("Perspective correction", image)
 
     image = cv2.morphologyEx(image, cv2.MORPH_CLOSE, square_kern(6))
-    visualize(image)
+    visualize("Morphological closing", image)
 
     classes = np.zeros((n, m), dtype=np.uint8)
 
@@ -442,17 +443,17 @@ def read_board(file, model):
         cell = image[
                 cell_y:cell_y+cell_h,
                 cell_x:cell_x+cell_w]
-        visualize(cell)
+        visualize("Grid cell", cell)
         letter = main_blob(cell)
         figure = cv2.cvtColor(cell, cv2.COLOR_GRAY2BGR)
         figure[letter == 255] = (0, 0, 255)
-        visualize(figure)
+        visualize("Main blob", figure)
         letter = trim_to_content(letter)
-        visualize(letter)
+        visualize("Trim", letter)
         letter = frame(letter, 1.5)
-        visualize(letter)
+        visualize("Frame", letter)
         letter = smooth_out(letter)
-        visualize(letter)
+        visualize("Smooth out", letter)
         classes[i, j] = model.predict(letter)
 
     return classes
