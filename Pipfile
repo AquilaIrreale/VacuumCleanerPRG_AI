@@ -15,6 +15,7 @@ pandas = "*"
 tensorflow = "*"
 matplotlib = "*"
 sklearn = "*"
+pydot = "*"
 
 [requires]
 python_version = "3.8"

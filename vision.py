@@ -49,13 +49,13 @@ class LetterRecognizerNN:
         else:
             input_cnn = layers.Input(shape=(784,))
 
-            layer = layers.Reshape((28, 28, 1), input_shape=(784,))(input_cnn) # why , 1 in shape necessary?
+            layer = layers.Reshape((28, 28, 1), input_shape=(784,))(input_cnn)
 
             # cnn layer
-            cnn1 = layers.Conv2D(32, (3, 3), 1, padding='same', activation='relu')(layer)
+            cnn1 = layers.Conv2D(16, (3, 3), 1, padding='same', activation='relu')(layer)
             poll = layers.MaxPooling2D((2, 2), padding='same')(cnn1)
             # cnn layer
-            cnn2 = layers.Conv2D(64, (3, 3), 2, padding='same', activation='relu')(poll)
+            cnn2 = layers.Conv2D(32, (3, 3), 2, padding='same', activation='relu')(poll)
             poll2 = layers.MaxPooling2D((2, 2), padding='same')(cnn2)
 
             # inception module
@@ -63,22 +63,25 @@ class LetterRecognizerNN:
             conv1_1 = layers.Conv2D(32, (1, 1), padding='same', activation='relu')(poll2)
             conv1_2 = layers.Conv2D(32, (1, 1), padding='same', activation='relu')(poll2)
             conv1_3 = layers.Conv2D(32, (3, 3), padding='same', activation='relu')(poll2)
-            pool = layers.MaxPooling2D((3, 3), strides=(1, 1), padding='same')(conv1_3)
+            pool_inception = layers.MaxPooling2D((3, 3), strides=(1, 1), padding='same')(conv1_3)
             # 2 layer
-            conv2_1 = layers.Conv2D(32, (1, 1), padding='same', activation='relu')(conv1_1)
-            conv2_2 = layers.Conv2D(64, (3, 3), padding='same', activation='relu')(conv1_2)
-            conv2_3 = layers.Conv2D(64, (5, 5), padding='same', activation='relu')(conv1_3)
-            conv2_4 = layers.Conv2D(64, (1, 1), padding='same', activation='relu')(pool)
+            conv2_1 = layers.Conv2D(32, (1, 1), padding='same', activation='relu')(poll2)
+            conv2_2 = layers.Conv2D(64, (3, 3), padding='same', activation='relu')(conv1_1)
+            conv2_3 = layers.Conv2D(64, (5, 5), padding='same', activation='relu')(conv1_2)
+            conv2_4 = layers.Conv2D(64, (1, 1), padding='same', activation='relu')(pool_inception)
+
             # concatenate filters, assumes filters/channels last
             inception_layer = layers.concatenate([conv2_1, conv2_2, conv2_3, conv2_4], axis=-1)
 
             # mlp
             flat = layers.Flatten()(inception_layer)
-            dense1 = layers.Dense(128, activation="relu")(flat)
+            dense1 = layers.Dense(256, activation="relu")(flat)
             drop1 = layers.Dropout(.5)(dense1)
-            dense2 = layers.Dense(64, activation="relu")(drop1)
+            dense2 = layers.Dense(128, activation="relu")(drop1)
             drop2 = layers.Dropout(.5)(dense2)
-            output = layers.Dense(6, activation="softmax")(drop2)
+            dense3 = layers.Dense(64, activation="relu")(drop2)
+            drop3 = layers.Dropout(.5)(dense3)
+            output = layers.Dense(6, activation="softmax")(drop3)
 
             self.model = Model(inputs=input_cnn, outputs=output)
             self.model.compile(
@@ -134,6 +137,8 @@ class LetterRecognizerNN:
         plt.xlabel("Epoch")
         plt.legend(["Train", "Val"], loc="upper left")
         plt.savefig("loss_chart.png")
+
+        keras.utils.plot_model(self.model, to_file="model.png", show_shapes=True)
 
     def predict(self, image):
         if len(image.shape) > 2:

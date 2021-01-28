@@ -19,6 +19,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install libgl1-mesa-dev
+          sudo apt install graphviz
       - name: Install dependencies from Pipfile.lock
         run: |
           pipenv sync --dev
@@ -36,5 +37,6 @@ jobs:
         run: |
           cml-publish accuracy_chart.png --md >> report.md
           cml-publish loss_chart.png --md >> report.md
+          cml-publish model.png --md >> report.md
           cml-send-comment report.md
           cml-send-github-check report.md
