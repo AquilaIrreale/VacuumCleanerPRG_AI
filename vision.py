@@ -220,7 +220,7 @@ def mean_lines(lines):
             "Scaled rectified Hough transform data",
             "Rho", "Theta", scaled_lines)
 
-    model = DBSCAN(eps=16, min_samples=1)
+    model = DBSCAN(eps=24, min_samples=1)
     model.fit(scaled_lines)
 
     clusters = {}
@@ -397,9 +397,9 @@ def read_board(file, model):
     grid = largest_blob(image)
     visualize("Largest blob (grid)", grid)
 
-    lines = cv2.HoughLines(grid, 1, np.pi/180, 150)
+    lines = cv2.HoughLines(grid, 1, np.pi/180, 200)
     lines = lines[:, 0, :]
-    figure = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    figure = cv2.cvtColor(grid, cv2.COLOR_GRAY2BGR)
     for line in lines:
         figure = draw_line(figure, line, (0, 0, 255))
     visualize("Hough transform of grid", figure)
