@@ -3,7 +3,6 @@ import sys
 import gzip
 import math
 import random
-import shutil
 
 from io import BytesIO
 from pathlib import Path
@@ -25,11 +24,29 @@ from tensorflow.keras import layers
 from sklearn.cluster import DBSCAN
 
 
+def parse_labels(file):
+    labels = {}
+    with open(file) as f:
+        for line in f:
+            cls, label = line.split()
+            labels[int(cls)] = label
+    return labels
+
+
+def write_labels(file, labels):
+    with open(file, "w") as f:
+        for cls, label in labels.items():
+            print(f"{cls} {label}", file=f)
+
+
 class LetterRecognizerNN:
     def __init__(self, model_path=None):
         if model_path is not None:
+            model_path = Path(model_path)
+            self.labels = parse_labels(model_path/"classes")
             self.model = keras.models.load_model(model_path)
         else:
+            self.labels = None
             self.model = keras.Sequential()
             self.model.add(layers.Dense(512, activation="relu", input_shape=(784,)))
             self.model.add(layers.Dropout(0.2))
@@ -45,6 +62,7 @@ class LetterRecognizerNN:
     def train(self, dataset_path, model_path=None, batch_size=128, epochs=15):
         dataset_path = Path(dataset_path)
         model_path = Path(model_path)
+        self.labels = parse_labels(dataset_path/"classes")
 
         with gzip.open(dataset_path/"training.csv.gz") as f:
             train = np.genfromtxt(f, delimiter=",")
@@ -66,7 +84,7 @@ class LetterRecognizerNN:
 
         if model_path is not None:
             self.model.save(model_path)
-            shutil.copy(dataset_path/"classes", model_path/"classes")
+            write_labels(model_path/"classes", self.labels)
 
         score = self.model.evaluate(test_imgs, test_labels, verbose=0)
         print("Test loss:", score[0])
@@ -469,6 +487,14 @@ def read_board(file, model):
     return classes
 
 
+def print_board(board, labels):
+    n, m = board.shape
+    print(f"{'+---'*m}+")
+    for row in board:
+        print(f"| {' | '.join(labels[c] for c in row)} |")
+        print(f"{'+---'*m}+")
+
+
 if __name__ == "__main__":
     program, command, *args = sys.argv
     if command == "train":
@@ -478,11 +504,6 @@ if __name__ == "__main__":
 
     model_path, image_file = args
     model_path = Path(model_path)
-    labels = {}
-    with open(model_path/"classes") as f:
-        for line in f:
-            cls, label = line.split()
-            labels[int(cls)] = label
 
     print("Loading model...")
     print()
@@ -490,13 +511,9 @@ if __name__ == "__main__":
     print()
 
     if command == "predict":
-        print(labels[nn.predict(cv2.imread(image_file))])
+        print(nn.labels[nn.predict(cv2.imread(image_file))])
 
     elif command == "read-board":
         classes = read_board(image_file, nn)
-        n, m = classes.shape
-        print(f"{'+---'*m}+")
-        for row in classes:
-            print(f"| {' | '.join(labels[c] for c in row)} |")
-            print(f"{'+---'*m}+")
+        print_board(classes, nn.labels)
         print()
