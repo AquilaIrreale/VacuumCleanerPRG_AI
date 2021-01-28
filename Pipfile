@@ -12,6 +12,9 @@ opencv-python = "*"
 imutils = "*"
 pygame = "*"
 pandas = "*"
+tensorflow = "*"
+matplotlib = "*"
+sklearn = "*"
 
 [requires]
 python_version = "3.8"
