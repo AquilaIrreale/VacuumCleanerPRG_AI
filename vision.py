@@ -61,7 +61,6 @@ class LetterRecognizerNN:
 
     def train(self, dataset_path, model_path=None, batch_size=128, epochs=15):
         dataset_path = Path(dataset_path)
-        model_path = Path(model_path)
         self.labels = parse_labels(dataset_path/"classes")
 
         with gzip.open(dataset_path/"training.csv.gz") as f:
@@ -83,6 +82,7 @@ class LetterRecognizerNN:
                 validation_data=(test_imgs, test_labels))
 
         if model_path is not None:
+            model_path = Path(model_path)
             self.model.save(model_path)
             write_labels(model_path/"classes", self.labels)
 
