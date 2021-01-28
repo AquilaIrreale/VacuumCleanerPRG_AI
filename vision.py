@@ -21,6 +21,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 from tensorflow import keras
 from tensorflow.keras import layers
+from tensorflow.keras.models import Model
 from sklearn.cluster import DBSCAN
 
 
@@ -46,17 +47,45 @@ class LetterRecognizerNN:
             self.labels = parse_labels(model_path/"classes")
             self.model = keras.models.load_model(model_path)
         else:
-            self.labels = None
-            self.model = keras.Sequential()
-            self.model.add(layers.Dense(512, activation="relu", input_shape=(784,)))
-            self.model.add(layers.Dropout(0.2))
-            self.model.add(layers.Dense(256, activation="relu"))
-            self.model.add(layers.Dropout(0.3))
-            self.model.add(layers.Dense(6, activation="softmax"))
+            input_cnn = layers.Input(shape=(784,))
+
+            layer = layers.Reshape((28, 28, 1), input_shape=(784,))(input_cnn) # why , 1 in shape necessary?
+
+            # cnn layer
+            cnn1 = layers.Conv2D(32, (3, 3), 1, padding='same', activation='relu')(layer)
+            poll = layers.MaxPooling2D((2, 2), padding='same')(cnn1)
+            # cnn layer
+            cnn2 = layers.Conv2D(64, (3, 3), 2, padding='same', activation='relu')(poll)
+            poll2 = layers.MaxPooling2D((2, 2), padding='same')(cnn2)
+
+            # inception module
+            # 1 layer
+            conv1_1 = layers.Conv2D(32, (1, 1), padding='same', activation='relu')(poll2)
+            conv1_2 = layers.Conv2D(32, (1, 1), padding='same', activation='relu')(poll2)
+            conv1_3 = layers.Conv2D(32, (3, 3), padding='same', activation='relu')(poll2)
+            pool = layers.MaxPooling2D((3, 3), strides=(1, 1), padding='same')(conv1_3)
+            # 2 layer
+            conv2_1 = layers.Conv2D(32, (1, 1), padding='same', activation='relu')(conv1_1)
+            conv2_2 = layers.Conv2D(64, (3, 3), padding='same', activation='relu')(conv1_2)
+            conv2_3 = layers.Conv2D(64, (5, 5), padding='same', activation='relu')(conv1_3)
+            conv2_4 = layers.Conv2D(64, (1, 1), padding='same', activation='relu')(pool)
+            # concatenate filters, assumes filters/channels last
+            inception_layer = layers.concatenate([conv2_1, conv2_2, conv2_3, conv2_4], axis=-1)
+
+            # mlp
+            flat = layers.Flatten()(inception_layer)
+            dense1 = layers.Dense(128, activation="relu")(flat)
+            drop1 = layers.Dropout(.5)(dense1)
+            dense2 = layers.Dense(64, activation="relu")(drop1)
+            drop2 = layers.Dropout(.5)(dense2)
+            output = layers.Dense(6, activation="softmax")(drop2)
+
+            self.model = Model(inputs=input_cnn, outputs=output)
             self.model.compile(
                     loss="sparse_categorical_crossentropy",
                     optimizer="adam",
                     metrics=["accuracy"])
+
         self.model.summary()
 
     def train(self, dataset_path, model_path=None, batch_size=128, epochs=15):
@@ -497,6 +526,7 @@ def print_board(board, labels):
 
 if __name__ == "__main__":
     program, command, *args = sys.argv
+
     if command == "train":
         nn = LetterRecognizerNN()
         nn.train(args[0], *args[1:2])
