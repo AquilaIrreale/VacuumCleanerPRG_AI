@@ -143,6 +143,7 @@ def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
     visited = {start_state: (None, None)}
     frontier = deque()
     frontier.append(start_state)
+    frontier_set = {start_state}
     n_nodes = 1
 
     def update():
@@ -153,10 +154,12 @@ def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
 
     while frontier:
         state = frontier.pop() if lifo else frontier.popleft()
+        frontier_set.discard(state)
         for move, dest_state in moves(board_layout, state):
-            if dest_state in visited or dest_state in frontier:
+            if dest_state in visited or dest_state in frontier_set:
                 continue
             frontier.append(dest_state)
+            frontier_set.add(dest_state)
             n_nodes += 1
             if time_ns() > last_update + update_period:
                 last_update += update_period
