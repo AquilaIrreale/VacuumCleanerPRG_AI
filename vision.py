@@ -415,20 +415,21 @@ def read_board(file, model):
     for line in lines:
         rho, theta = line
         if np.pi/4 <= theta < np.pi*3/4:
-            horizontal_lines.append(line)
+            _, y = line_intersection(line, (w/2, 0))
+            horizontal_lines.append((y, line))
         else:
-            vertical_lines.append(line)
+            x, _ = line_intersection(line, (h/2, np.pi/2))
+            vertical_lines.append((x, line))
 
     m = len(vertical_lines) - 1
     n = len(horizontal_lines) - 1
     print(f"Shape detected {n}x{m}")
     print()
 
-    key = lambda x: math.fabs(x[0])
-    left_line   = min(vertical_lines,   key=key)
-    right_line  = max(vertical_lines,   key=key)
-    top_line    = min(horizontal_lines, key=key)
-    bottom_line = max(horizontal_lines, key=key)
+    _, left_line   = min(vertical_lines)
+    _, right_line  = max(vertical_lines)
+    _, top_line    = min(horizontal_lines)
+    _, bottom_line = max(horizontal_lines)
 
     lines = [top_line, left_line, bottom_line, right_line]
     for line in lines:
