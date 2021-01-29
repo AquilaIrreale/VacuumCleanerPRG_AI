@@ -1,3 +1,4 @@
+import sys
 import math
 
 from time import time_ns
@@ -237,9 +238,9 @@ def print_board(layout, start_pos, final_pos, state):
 
 
 def test():
-    model = LetterRecognizerNN("model")
+    model = LetterRecognizerNN(sys.argv[1])
     print()
-    board = read_board("images/notebook_easy.jpg", model)
+    board = read_board(sys.argv[2], model)
     vision.print_board(board, model.labels)
     print(flush=True)
 
