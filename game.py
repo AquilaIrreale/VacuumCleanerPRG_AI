@@ -1,8 +1,50 @@
-from collections import deque
+import math
+
+from itertools import count
+from heapq import heappush, heappop
+from collections import deque, defaultdict
+from dataclasses import dataclass
+from typing import Any
+
 import numpy as np
 
 import vision
 from vision import read_board, LetterRecognizerNN
+
+
+class PQueue:
+    @dataclass(order=True)
+    class Entry:
+        p: Any
+        count: int
+        v: Any
+        deleted: bool = False
+
+    def __init__(self):
+        self.heap = []
+        self.dict = {}
+        self.c = count()
+
+    def __bool__(self):
+        return bool(self.dict)
+
+    def remove(self, v):
+        entry = self.dict.pop(v)
+        entry.deleted = True
+
+    def push(self, p, v):
+        if v in self.dict:
+            self.remove(v)
+        entry = PQueue.Entry(p, next(self.c), v)
+        self.dict[v] = entry
+        heappush(self.heap, entry)
+
+    def pop(self):
+        while True:
+            entry = heappop(self.heap)
+            if not entry.deleted:
+                del self.dict[entry.v]
+                return entry.p, entry.v
 
 
 class State:
@@ -97,7 +139,7 @@ def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
     if start_state == final_state:
         return None, 0
 
-    visited = {}
+    visited = {start_state: (None, None)}
     frontier = deque()
     frontier.append(start_state)
     expanded = 1
@@ -114,6 +156,26 @@ def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
                 return visited, expanded
 
     return None, expanded
+
+
+def informed_graph_search(board_layout, start_state, final_state, heuristic):
+    frontier = PQueue()
+    frontier.push(0, start_state)
+    expanded = defaultdict(lambda: (math.inf, None, None)) # (cost, move, from_state)
+    expanded[start_state] = (0, None, None)
+
+    while frontier:
+        _, state = frontier.pop()
+        if state == final_state:
+            return expanded, len(expanded)
+        cur_cost, _, _ = expanded[state]
+        for move, dest_state in moves(board_layout, state):
+            dest_cost, _, _ = expanded[dest_state]
+            if cur_cost + 1 < dest_cost:
+                expanded[dest_state] = cur_cost + 1, move, state
+                frontier.push(cur_cost+1+heuristic(dest_state, final_state), dest_state)
+
+    return None, len(expanded)
 
 
 def print_board(layout, start_pos, final_pos, state):
@@ -149,7 +211,7 @@ def print_board(layout, start_pos, final_pos, state):
 def test():
     model = LetterRecognizerNN("model")
     print()
-    board = read_board("images/digital.png", model)
+    board = read_board("images/notebook_easy.jpg", model)
     vision.print_board(board, model.labels)
     print(flush=True)
 
@@ -157,6 +219,7 @@ def test():
     start_state = State(start_pos, dirt)
     final_state = State(final_pos, dirt*0)
 
+    print("Uninformed (fifo) graph search")
     visited, expanded = uninformed_graph_search(layout, start_state, final_state)
 
     if visited is None:
@@ -180,6 +243,33 @@ def test():
 
     print()
     print(f"Nodes expanded: {expanded}")
+    print()
+
+    print("Informed (A*) graph search")
+    expanded, n = informed_graph_search(layout, start_state, final_state, state_distance)
+
+    if expanded is None:
+        print("No solution found!")
+        return
+
+    path = []
+    state = final_state
+    while state != start_state:
+        _, move, prev_state = expanded[state]
+        path.append((state, move))
+        state = prev_state
+    path.append((state, None))
+    path.reverse()
+
+    for state, move in path:
+        if move is not None:
+            print()
+            print(move)
+        print_board(layout, start_pos, final_pos, state)
+
+    print()
+    print(f"Nodes expanded: {n}")
+    print()
 
 
 if __name__ == "__main__":
