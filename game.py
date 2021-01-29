@@ -1,6 +1,9 @@
 from collections import deque
 import numpy as np
 
+import vision
+from vision import read_board, LetterRecognizerNN
+
 
 class State:
     def __init__(self, pos, dirt):
@@ -144,10 +147,11 @@ def print_board(layout, start_pos, final_pos, state):
 
 
 def test():
-    board = np.array([ # TODO: get from vision
-        [0, 1, 2],
-        [3, 4, 5],
-        [0, 1, 4]])
+    model = LetterRecognizerNN("model")
+    print()
+    board = read_board("images/digital.png", model)
+    vision.print_board(board, model.labels)
+    print(flush=True)
 
     layout, dirt, start_pos, final_pos = parse_board("model/classes", board)
     start_state = State(start_pos, dirt)
