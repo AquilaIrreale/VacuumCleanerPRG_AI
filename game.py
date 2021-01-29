@@ -148,7 +148,7 @@ def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
     n_nodes = 1
 
     def update():
-        print(f"\rNodes expanded: {n_nodes:-10}", end="")
+        print(f"\rNodes expanded: {n_nodes:-10}", end="", flush=True)
     update_period = 500000000
     last_update = time_ns()
     update()
@@ -182,7 +182,7 @@ def informed_graph_search(board_layout, start_state, final_state, heuristic):
     expanded[start_state] = (0, None, None)
 
     def update():
-        print(f"\rNodes expanded: {len(expanded):-10}", end="")
+        print(f"\rNodes expanded: {len(expanded):-10}", end="", flush=True)
     update_period = 500000000
     last_update = time_ns()
     update()
