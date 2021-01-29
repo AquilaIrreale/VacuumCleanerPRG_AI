@@ -1,5 +1,6 @@
 import math
 
+from time import time_ns
 from itertools import count
 from heapq import heappush, heappop
 from collections import deque, defaultdict
@@ -142,7 +143,13 @@ def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
     visited = {start_state: (None, None)}
     frontier = deque()
     frontier.append(start_state)
-    expanded = 1
+    n_nodes = 1
+
+    def update():
+        print(f"\rNodes expanded: {n_nodes:-10}", end="")
+    update_period = 500000000
+    last_update = time_ns()
+    update()
 
     while frontier:
         state = frontier.pop() if lifo else frontier.popleft()
@@ -150,12 +157,18 @@ def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
             if dest_state in visited or dest_state in frontier:
                 continue
             frontier.append(dest_state)
-            expanded += 1
+            n_nodes += 1
+            if time_ns() > last_update + update_period:
+                last_update += update_period
+                update()
             visited[dest_state] = move, state
             if dest_state == final_state:
-                return visited, expanded
-
-    return None, expanded
+                update()
+                print()
+                return visited
+    update()
+    print()
+    return None
 
 
 def informed_graph_search(board_layout, start_state, final_state, heuristic):
@@ -164,18 +177,30 @@ def informed_graph_search(board_layout, start_state, final_state, heuristic):
     expanded = defaultdict(lambda: (math.inf, None, None)) # (cost, move, from_state)
     expanded[start_state] = (0, None, None)
 
+    def update():
+        print(f"\rNodes expanded: {len(expanded):-10}", end="")
+    update_period = 500000000
+    last_update = time_ns()
+    update()
+
     while frontier:
         _, state = frontier.pop()
         if state == final_state:
-            return expanded, len(expanded)
+            update()
+            print()
+            return expanded
         cur_cost, _, _ = expanded[state]
         for move, dest_state in moves(board_layout, state):
             dest_cost, _, _ = expanded[dest_state]
             if cur_cost + 1 < dest_cost:
                 expanded[dest_state] = cur_cost + 1, move, state
                 frontier.push(cur_cost+1+heuristic(dest_state, final_state), dest_state)
-
-    return None, len(expanded)
+                if time_ns() > last_update + update_period:
+                    last_update += update_period
+                    update()
+    update()
+    print()
+    return None
 
 
 def print_board(layout, start_pos, final_pos, state):
@@ -220,56 +245,55 @@ def test():
     final_state = State(final_pos, dirt*0)
 
     print("Uninformed (fifo) graph search")
-    visited, expanded = uninformed_graph_search(layout, start_state, final_state)
+    try:
+        visited = uninformed_graph_search(layout, start_state, final_state)
+    except KeyboardInterrupt:
+        print()
+    else:
+        if visited is None:
+            print("No solution found!")
+            return
 
-    if visited is None:
-        print("No solution found!")
-        return
+        path = []
+        state = final_state
+        while state != start_state:
+            move, prev_state = visited[state]
+            path.append((state, move))
+            state = prev_state
+        path.append((state, None))
+        path.reverse()
 
-    path = []
-    state = final_state
-    while state != start_state:
-        move, prev_state = visited[state]
-        path.append((state, move))
-        state = prev_state
-    path.append((state, None))
-    path.reverse()
-
-    for state, move in path:
-        if move is not None:
-            print()
-            print(move)
-        print_board(layout, start_pos, final_pos, state)
-
-    print()
-    print(f"Nodes expanded: {expanded}")
-    print()
+        for state, move in path:
+            if move is not None:
+                print()
+                print(move)
+            print_board(layout, start_pos, final_pos, state)
+        print()
 
     print("Informed (A*) graph search")
-    expanded, n = informed_graph_search(layout, start_state, final_state, state_distance)
+    try:
+        expanded = informed_graph_search(layout, start_state, final_state, state_distance)
+    except KeyboardInterrupt:
+        print()
+    else:
+        if expanded is None:
+            print("No solution found!")
+            return
 
-    if expanded is None:
-        print("No solution found!")
-        return
+        path = []
+        state = final_state
+        while state != start_state:
+            _, move, prev_state = expanded[state]
+            path.append((state, move))
+            state = prev_state
+        path.append((state, None))
+        path.reverse()
 
-    path = []
-    state = final_state
-    while state != start_state:
-        _, move, prev_state = expanded[state]
-        path.append((state, move))
-        state = prev_state
-    path.append((state, None))
-    path.reverse()
-
-    for state, move in path:
-        if move is not None:
-            print()
-            print(move)
-        print_board(layout, start_pos, final_pos, state)
-
-    print()
-    print(f"Nodes expanded: {n}")
-    print()
+        for state, move in path:
+            if move is not None:
+                print()
+                print(move)
+            print_board(layout, start_pos, final_pos, state)
 
 
 if __name__ == "__main__":
