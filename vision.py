@@ -158,7 +158,11 @@ class LetterRecognizerNN:
         plt.savefig("loss_chart.png")
         plt.clf()
 
-        keras.utils.plot_model(self.model, to_file="model.png", show_shapes=True)
+        try:
+            keras.utils.plot_model(nn.model, to_file="model.png", show_shapes=True)
+        except ImportError as e:
+            print("Cannot generate graphic representation of model (model.png):")
+            print("".join(e.args[0]))
 
     def predict(self, image):
         if len(image.shape) > 2:
