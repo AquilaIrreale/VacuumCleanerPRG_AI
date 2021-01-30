@@ -22,7 +22,7 @@ jobs:
           sudo apt install graphviz
       - name: Install dependencies from Pipfile.lock
         run: |
-          pipenv sync --dev
+          pipenv install --dev --skip-lock
       - name: Pull dataset
         env:
           GDRIVE_CREDENTIALS_DATA: ${{ secrets.GDRIVE_CREDENTIALS_DATA }}
