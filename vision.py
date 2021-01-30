@@ -10,6 +10,7 @@ from statistics import mean
 from operator import itemgetter
 from itertools import product
 from contextlib import suppress
+from multiprocessing import Pool
 
 import cv2
 import numpy as np
@@ -451,14 +452,10 @@ def read_board(file, model):
     image = cv2.warpPerspective(corrected_image, transform_matrix, (w, h), flags=cv2.INTER_LINEAR)
     visualize("Perspective correction of original image", image)
 
-    #image = cv2.morphologyEx(image, cv2.MORPH_CLOSE, square_kern(6))
-    #visualize("Morphological closing", image)
-
-    classes = np.zeros((n, m), dtype=np.uint8)
-
     cell_h = h//n
     cell_w = w//m
-    for i, j in product(range(n), range(m)):
+
+    def process_cell(i, j):
         cell_y = i*cell_h
         cell_x = j*cell_w
         cell = image[
@@ -483,8 +480,19 @@ def read_board(file, model):
         visualize("Frame", letter)
         letter = smooth_out(letter)
         visualize("Smooth out", letter)
-        classes[i, j] = model.predict(letter)
+        return model.predict(letter)
 
+    indices = product(range(n), range(m))
+
+    if debug_output: # Do all work in current process
+        classes = np.array([process_cell(i, j) for i, j in indices])
+    else: # Use all available cores
+        with Pool() as p:
+            classes = np.array(
+                    p.starmap(process_cell, indices),
+                    dtype=np.uint8)
+
+    classes.shape = n, m
     return classes
 
 
