@@ -35,8 +35,12 @@ jobs:
         env:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo "## Charts" >> report.md
           cml-publish accuracy_chart.png --md >> report.md
           cml-publish loss_chart.png --md >> report.md
+          echo "## Confusion Matrix" >> report.md
+          cml-publish confusion_matrix.png --md >> report.md
+          echo "## Network Topology" >> report.md
           cml-publish model.png --md >> report.md
           cml-send-comment report.md
           cml-send-github-check report.md

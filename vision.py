@@ -22,6 +22,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
+from sklearn.metrics import confusion_matrix
 from sklearn.cluster import DBSCAN
 
 
@@ -117,8 +118,27 @@ class LetterRecognizerNN:
             write_labels(model_path/"classes", self.labels)
 
         score = self.model.evaluate(test_imgs, test_labels, verbose=0)
-        print("Test loss:", score[0])
-        print("Test accuracy:", score[1])
+
+        loss = score[0]
+        accuracy = score[1]
+
+        with open("report.md", "w") as f:
+            f.write("# Metriche\n")
+            f.write(f"loss: {loss}\n")
+            f.write(f"accuracy: {accuracy}\n\n")
+
+        print("Test loss:", loss)
+        print("Test accuracy:", accuracy)
+
+        pred_test_labels = self.model.predict(test_imgs)
+        pred_test_labels = np.argmax(pred_test_labels, axis=1)
+
+        plt.imshow(confusion_matrix(test_labels, pred_test_labels), cmap=plt.cm.Blues)
+        plt.xlabel("Predicted labels")
+        plt.ylabel("True labels")
+        plt.title('Confusion matrix ')
+        plt.savefig("confusion_matrix.png")
+        plt.clf()
 
         plt.plot(history.history["accuracy"])
         plt.plot(history.history["val_accuracy"])
@@ -127,6 +147,7 @@ class LetterRecognizerNN:
         plt.xlabel("Epoch")
         plt.legend(["Train", "Val"], loc="upper left")
         plt.savefig("accuracy_chart.png")
+        plt.clf()
 
         plt.plot(history.history["loss"])
         plt.plot(history.history["val_loss"])
@@ -135,6 +156,7 @@ class LetterRecognizerNN:
         plt.xlabel("Epoch")
         plt.legend(["Train", "Val"], loc="upper left")
         plt.savefig("loss_chart.png")
+        plt.clf()
 
         keras.utils.plot_model(self.model, to_file="model.png", show_shapes=True)
 

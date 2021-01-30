@@ -130,5 +130,7 @@ dmypy.json
 /dataset
 
 # Other
+confusion_matrix.png
 accuracy_chart.png
 loss_chart.png
+model.png
