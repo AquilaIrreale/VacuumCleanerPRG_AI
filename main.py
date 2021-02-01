@@ -7,6 +7,22 @@ from pygame import display, transform, Color, Rect
 import assets
 
 
+class Timer:
+    def __init__(self):
+        self.target = None
+        self.period = None
+
+    def set(self, period_ms):
+        self.period = period_ms * 10**6
+        self.target = time.time_ns() + self.period
+
+    def tick(self):
+        if time.time_ns() < self.target:
+            return False
+        self.target += self.period
+        return True
+
+
 class Assets:
     BASE_TILE_SIZE = 16
 
