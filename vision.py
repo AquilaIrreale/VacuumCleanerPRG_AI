@@ -120,47 +120,48 @@ class LetterRecognizerNN:
         loss = score[0]
         accuracy = score[1]
 
-        with open("report.md", "w") as f:
-            f.write("# Metriche\n")
-            f.write(f"loss: {loss}\n")
-            f.write(f"accuracy: {accuracy}\n\n")
-
         print("Test loss:", loss)
         print("Test accuracy:", accuracy)
 
-        pred_test_labels = self.model.predict(test_imgs)
-        pred_test_labels = np.argmax(pred_test_labels, axis=1)
+        if os.getenv('VACUUM_GENERATE_REPORT'):
+            with open("report.md", "w") as f:
+                f.write("# Metriche\n")
+                f.write(f"loss: {loss}\n")
+                f.write(f"accuracy: {accuracy}\n\n")
 
-        plt.imshow(confusion_matrix(test_labels, pred_test_labels), cmap=plt.cm.Blues)
-        plt.xlabel("Predicted labels")
-        plt.ylabel("True labels")
-        plt.title('Confusion matrix ')
-        plt.savefig("confusion_matrix.png")
-        plt.clf()
+            pred_test_labels = self.model.predict(test_imgs)
+            pred_test_labels = np.argmax(pred_test_labels, axis=1)
 
-        plt.plot(history.history["accuracy"])
-        plt.plot(history.history["val_accuracy"])
-        plt.title("Model accuracy")
-        plt.ylabel("Accuracy")
-        plt.xlabel("Epoch")
-        plt.legend(["Train", "Val"], loc="upper left")
-        plt.savefig("accuracy_chart.png")
-        plt.clf()
+            plt.imshow(confusion_matrix(test_labels, pred_test_labels), cmap=plt.cm.Blues)
+            plt.xlabel("Predicted labels")
+            plt.ylabel("True labels")
+            plt.title('Confusion matrix ')
+            plt.savefig("confusion_matrix.png")
+            plt.clf()
 
-        plt.plot(history.history["loss"])
-        plt.plot(history.history["val_loss"])
-        plt.title("Model loss")
-        plt.ylabel("Loss")
-        plt.xlabel("Epoch")
-        plt.legend(["Train", "Val"], loc="upper left")
-        plt.savefig("loss_chart.png")
-        plt.clf()
+            plt.plot(history.history["accuracy"])
+            plt.plot(history.history["val_accuracy"])
+            plt.title("Model accuracy")
+            plt.ylabel("Accuracy")
+            plt.xlabel("Epoch")
+            plt.legend(["Train", "Val"], loc="upper left")
+            plt.savefig("accuracy_chart.png")
+            plt.clf()
 
-        try:
-            keras.utils.plot_model(nn.model, to_file="model.png", show_shapes=True)
-        except ImportError as e:
-            print("Cannot generate graphic representation of model (model.png):")
-            print("".join(e.args[0]))
+            plt.plot(history.history["loss"])
+            plt.plot(history.history["val_loss"])
+            plt.title("Model loss")
+            plt.ylabel("Loss")
+            plt.xlabel("Epoch")
+            plt.legend(["Train", "Val"], loc="upper left")
+            plt.savefig("loss_chart.png")
+            plt.clf()
+
+            try:
+                keras.utils.plot_model(nn.model, to_file="model.png", show_shapes=True)
+            except ImportError as e:
+                print("Cannot generate graphic representation of model (model.png):")
+                print("".join(e.args[0]))
 
     def predict(self, image):
         if len(image.shape) > 2:
