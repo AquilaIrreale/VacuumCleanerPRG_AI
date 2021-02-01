@@ -1,10 +1,15 @@
+#!/usr/bin/env python3
+
+import sys
 import time
 from importlib import resources
+from threading import Thread, Lock
 
 import pygame
-from pygame import display, transform, Color, Rect
+from pygame import display, transform, event, Color, Rect
 
 import assets
+from vision import LetterRecognizerNN
 
 
 class Timer:
@@ -21,6 +26,22 @@ class Timer:
             return False
         self.target += self.period
         return True
+
+
+class Clock:
+    def __init__(self, frequency):
+        self.target = None
+        self.period = 10**9//frequency
+
+    def start(self):
+        self.target = time.time_ns() + self.period
+
+    def time_remaining(self):
+        t = (self.target - time.time_ns()) // 10**6
+        return t if t >= 0 else 0
+
+    def advance(self):
+        self.target += self.period
 
 
 class Assets:
@@ -70,16 +91,98 @@ class Assets:
         self.dirt = [self.get_tile(dirt, i, 0) for i in range(2)]
 
 
-# ASSETS TEST
-pygame.init()
-screen = display.set_mode((16, 16), pygame.SCALED)
-assets = Assets()
-for surfaces in vars(assets).values():
-    if not isinstance(surfaces, list):
-        surfaces = [surfaces]
-    for surface in surfaces:
-        if isinstance(surface, pygame.Surface):
-            screen.fill(Color(255, 255, 255))
-            screen.blit(surface, (0, 0))
-            display.update()
-            time.sleep(.5)
+class GameQuit(Exception):
+    pass
+
+
+class BaseModule:
+    def __init__(self, clock_freq=30):
+        self.clock = Clock(clock_freq)
+
+    def run(self):
+        self.start()
+        self.clock.start()
+        while True:
+            while True:
+                wait_time = self.clock.time_remaining()
+                if wait_time > 0:
+                    e = event.wait(wait_time)
+                else:
+                    e = event.poll()
+                if e.type == pygame.NOEVENT:
+                    break
+                self.event(e)
+            self.clock.advance()
+
+            update_ret = self.update()
+            if update_ret is not None:
+                return update_ret
+
+            self.render()
+
+    def start(self):
+        raise NotImplementedError
+
+    def event(self, e):
+        raise NotImplementedError
+
+    def update(self):
+        raise NotImplementedError
+
+    def render(self):
+        raise NotImplementedError
+
+
+class SplashScreenModule(BaseModule):
+    def __init__(self, splash_image_asset):
+        super().__init__(5)
+        self.splash_image_asset = splash_image_asset
+
+    def start(self):
+        with resources.open_binary(assets, self.splash_image_asset) as f:
+            splash_surface = pygame.image.load(f)
+        size = splash_surface.get_size()
+        screen = display.set_mode(size)
+        screen.blit(splash_surface, (0, 0))
+        display.flip()
+
+    def event(self, e):
+        if e.type == pygame.QUIT:
+            raise GameQuit
+
+    def render(self):
+        pass
+
+
+class ModelLoadingModule(SplashScreenModule):
+    def __init__(self, model_path):
+        super().__init__("load_splash.png")
+        self.model_path = model_path
+        self.model = None
+        self.thread = Thread(target=self.worker, daemon=True)
+
+    def worker(self):
+        self.model = LetterRecognizerNN(self.model_path)
+
+    def start(self):
+        super().start()
+        self.thread.start()
+
+    def update(self):
+        if not self.thread.is_alive():
+            return self.model
+
+
+def main(model_path, board_image, algorithm):
+    display.init()
+    model = ModelLoadingModule(model_path).run()
+    print(model)
+
+
+if __name__ == "__main__":
+    _, model, board_image, *rest = sys.argv
+    if len(rest) == 0:
+        algorithm = "A*"
+    else:
+        algorithm, = rest
+    main(model, board_image, algorithm)
