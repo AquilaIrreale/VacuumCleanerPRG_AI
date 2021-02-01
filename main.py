@@ -159,7 +159,7 @@ class ModelLoadingModule(SplashScreenModule):
         super().__init__("load_splash.png")
         self.model_path = model_path
         self.model = None
-        self.thread = Thread(target=self.worker, daemon=True)
+        self.thread = Thread(target=self.worker)
 
     def worker(self):
         self.model = LetterRecognizerNN(self.model_path)
@@ -175,8 +175,11 @@ class ModelLoadingModule(SplashScreenModule):
 
 def main(model_path, board_image, algorithm):
     display.init()
-    model = ModelLoadingModule(model_path).run()
-    print(model)
+    try:
+        model = ModelLoadingModule(model_path).run()
+        print(model)
+    except (GameQuit, KeyboardInterrupt):
+        pass
 
 
 if __name__ == "__main__":
