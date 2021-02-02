@@ -185,7 +185,7 @@ def adjacent_pairs(seq):
     yield val1, first_val
 
 
-debug_output = True
+debug_output = False
 def visualize(title, image):
     if debug_output:
         cv2.imshow("visualize-window", image)
