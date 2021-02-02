@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import sys
 import time
 from functools import partial
