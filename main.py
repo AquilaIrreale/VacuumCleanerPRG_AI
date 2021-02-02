@@ -61,9 +61,14 @@ class Timer:
 
 
 class Clock:
-    def __init__(self, frequency):
-        self.target = None
-        self.period = 10**9//frequency
+    def __init__(self, freq=None, period=None):
+        self.target = 0
+        if freq is not None:
+            self.period = 10**9 // freq
+        elif period is not None:
+            self.period = period * 10**6
+        else:
+            raise TypeError("Either freq or period must be specified")
 
     def start(self):
         self.target = time.time_ns() + self.period
@@ -135,7 +140,7 @@ class GameQuit(Exception):
 
 class BaseModule:
     def __init__(self, clock_freq=30):
-        self.clock = Clock(clock_freq)
+        self.clock = Clock(freq=clock_freq)
 
     def run(self):
         self.start()
@@ -306,25 +311,56 @@ class Dirt:
 class Vacuum:
     def __init__(self, assets, pos):
         self.assets = assets
-        self.pos = pos
-        self.timer = Timer()
-        self.timer.set(500)
+        self._pos = pos
+        self.old_pos = pos
+        self.frame_timer = Timer()
+        self.frame_timer.set(500)
+        self.move_clock = Clock(period=1000)
         self.animation_state = 0
         self.animation_frame = 0
 
+    @staticmethod
+    def animation_function(x):
+        if x <= 0:
+            return 0
+        if x >= 1:
+            return 1
+        # Ruffini-Horner of 6x^5 - 15x^4 + 10x^3
+        return ((6 * x - 15) * x + 10) * x**3
+
+    @property
+    def pos(self):
+        return self._pos
+
+    @pos.setter
+    def pos(self, value):
+        self.old_pos = self._pos
+        self._pos = value
+        self.move_clock.start()
+
     def update(self):
-        if self.timer.tick():
+        if self.frame_timer.tick():
             frames = self.assets.vacuum[self.animation_state]
             self.animation_frame = (self.animation_frame+1) % len(frames)
 
     def render(self, dest_surf):
+        x, y = self.assets.grid_pos(self._pos)
+        t = self.move_clock.time_remaining()
+
+        if t > 0:
+            old_x, old_y = self.assets.grid_pos(self.old_pos)
+            dx, dy = x-old_x, y-old_y
+            c = self.animation_function(1-t/1000)
+            x = int(old_x + c*dx)
+            y = int(old_y + c*dy)
+
         frames = self.assets.vacuum[self.animation_state]
-        dest_surf.blit(frames[self.animation_frame], self.assets.grid_pos(self.pos))
+        dest_surf.blit(frames[self.animation_frame], (x, y))
 
 
 class MainGameModule(BaseModule):
     def __init__(self, desktop_size, board_layout, path):
-        super().__init__(clock_freq=30)
+        super().__init__(clock_freq=60)
         self.desktop_size = desktop_size
         self.board_layout = board_layout
         self.path = path
