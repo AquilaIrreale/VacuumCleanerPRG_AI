@@ -115,10 +115,15 @@ class Assets:
         self.wall_tile_l  = self.get_tile(tileset, 0, 1)
         self.wall_tile_mr = self.get_tile(tileset, 1, 1)
 
-        self.vacuum_a = [self.get_tile(vacuum, i, 0) for i in range(2)]
-        self.vacuum_b = [self.get_tile(vacuum, i, 1) for i in range(2)]
+        self.vacuum = [
+                [self.get_tile(vacuum, j, i) for j in range(2)]
+                for i in range(2)]
 
         self.dirt = [self.get_tile(dirt, i, 0) for i in range(2)]
+
+    def grid_pos(self, pos):
+        x, y = pos
+        return self.tile_size * x, self.tile_size * y
 
 
 class GameQuit(Exception):
@@ -257,6 +262,37 @@ class SolvingModule(SplashScreenModule):
             return self.path
 
 
+class Dirt:
+    def __init__(self, pos, level):
+        self.pos = pos
+        self.level = level
+
+    def update(self):
+        pass
+
+    def render(self, assets, dest_surf):
+        sprite = assets.dirt[self.level-1]
+        dest_surf.blit(sprite, assets.grid_pos(self.pos))
+
+
+class Vacuum:
+    def __init__(self, pos):
+        self.pos = pos
+        self.timer = Timer()
+        self.timer.set(500)
+        self.animation_state = 0
+        self.animation_frame = 0
+
+    def update(self, assets):
+        if self.timer.tick():
+            frames = assets.vacuum[self.animation_state]
+            self.animation_frame = (self.animation_frame+1) % len(frames)
+
+    def render(self, assets, dest_surf):
+        frames = assets.vacuum[self.animation_state]
+        dest_surf.blit(frames[self.animation_frame], assets.grid_pos(self.pos))
+
+
 class MainGameModule(BaseModule):
     def __init__(self, desktop_size, board_layout, path):
         super().__init__(clock_freq=30)
@@ -265,6 +301,8 @@ class MainGameModule(BaseModule):
         self.path = path
         self.screen = None
         self.background = None
+        self.dirt = []
+        self.vacuum = None
 
     SIZE_FACT = .9 # Max window size relative to desktop
 
@@ -300,15 +338,26 @@ class MainGameModule(BaseModule):
                 pos_y = y * self.assets.tile_size
                 self.background.blit(tile, (pos_x, pos_y))
 
+                dirt_level = start_state.dirt[y, x]
+                if dirt_level:
+                    self.dirt.append(Dirt((x, y), dirt_level))
+
+        self.vacuum = Vacuum(start_state.pos)
+
     def event(self, e):
         if e.type == pygame.QUIT:
             raise GameQuit
 
     def update(self):
-        pass
+        for d in self.dirt:
+            d.update()
+        self.vacuum.update(self.assets)
 
     def render(self):
         self.screen.blit(self.background, (0, 0))
+        for d in self.dirt:
+            d.render(self.assets, self.screen)
+        self.vacuum.render(self.assets, self.screen)
         display.flip()
 
 
