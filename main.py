@@ -1,8 +1,10 @@
 import os
 import sys
 import time
+import random
 
 from functools import partial
+from itertools import product
 from importlib import resources
 from threading import Thread, Lock
 
@@ -95,6 +97,7 @@ class Assets:
                     self.tile_size))
 
     def __init__(self, scale=1):
+        self.pixel_size = scale
         self.tile_size = self.BASE_TILE_SIZE * scale
 
         tileset = self.image_from_resource(assets, "tileset.png").convert()
@@ -106,7 +109,7 @@ class Assets:
             vacuum  = self.scale(vacuum, scale)
             dirt    = self.scale(dirt, scale)
 
-        for surface in tileset, vacuum, dirt:
+        for surface in tileset, vacuum:
             surface.set_colorkey(Color(255, 0, 255))
 
         self.default_tile = self.get_tile(tileset, 0, 0)
@@ -119,7 +122,7 @@ class Assets:
                 [self.get_tile(vacuum, j, i) for j in range(2)]
                 for i in range(2)]
 
-        self.dirt = [self.get_tile(dirt, i, 0) for i in range(2)]
+        self.dirt = [self.get_tile(dirt, i, 0) for i in range(3)]
 
     def grid_pos(self, pos):
         x, y = pos
@@ -263,35 +266,60 @@ class SolvingModule(SplashScreenModule):
 
 
 class Dirt:
-    def __init__(self, pos, level):
+    def __init__(self, assets, pos, level):
+        self.assets = assets
         self.pos = pos
-        self.level = level
+        self._level = level
+        self.sprite = assets.dirt[level].copy()
+        self.sprite.set_colorkey(Color(255, 0, 255))
+        self.animation_timer = Timer()
+        self.animation_coords = [(x, y) for x, y in product(range(16), repeat=2)]
+        self.animation_index = len(self.animation_coords)
+        random.shuffle(self.animation_coords)
+
+    @property
+    def level(self):
+        return self._level
+
+    @level.setter
+    def level(self, value):
+        self._level = value
+        self.animation_index = 0
+        self.animation_timer.set(1000//len(self.animation_coords))
 
     def update(self):
-        pass
+        while (self.animation_index < len(self.animation_coords)
+                and self.animation_timer.tick()):
+            x, y = self.animation_coords[self.animation_index]
+            pixel = Rect(
+                    x * self.assets.pixel_size,
+                    y * self.assets.pixel_size,
+                    self.assets.pixel_size,
+                    self.assets.pixel_size)
+            self.sprite.blit(self.assets.dirt[self._level], pixel, pixel)
+            self.animation_index += 1
 
-    def render(self, assets, dest_surf):
-        if self.level > 0:
-            sprite = assets.dirt[self.level-1]
-            dest_surf.blit(sprite, assets.grid_pos(self.pos))
+    def render(self, dest_surf):
+        dest_surf.blit(self.sprite, self.assets.grid_pos(self.pos))
 
 
 class Vacuum:
-    def __init__(self, pos):
+    def __init__(self, assets, pos):
+        self.assets = assets
         self.pos = pos
         self.timer = Timer()
         self.timer.set(500)
         self.animation_state = 0
         self.animation_frame = 0
 
-    def update(self, assets):
+    def update(self):
         if self.timer.tick():
-            frames = assets.vacuum[self.animation_state]
+            frames = self.assets.vacuum[self.animation_state]
             self.animation_frame = (self.animation_frame+1) % len(frames)
 
-    def render(self, assets, dest_surf):
-        frames = assets.vacuum[self.animation_state]
-        dest_surf.blit(frames[self.animation_frame], assets.grid_pos(self.pos))
+    def render(self, dest_surf):
+        frames = self.assets.vacuum[self.animation_state]
+        dest_surf.blit(frames[self.animation_frame], self.assets.grid_pos(self.pos))
 
 
 class MainGameModule(BaseModule):
@@ -343,9 +371,9 @@ class MainGameModule(BaseModule):
 
                 dirt_level = start_state.dirt[y, x]
                 if dirt_level:
-                    self.dirt[(x, y)] = Dirt((x, y), dirt_level)
+                    self.dirt[(x, y)] = Dirt(self.assets, (x, y), dirt_level)
 
-        self.vacuum = Vacuum(start_state.pos)
+        self.vacuum = Vacuum(self.assets, start_state.pos)
         self.state_advance_timer.set(1500)
 
     def event(self, e):
@@ -371,13 +399,13 @@ class MainGameModule(BaseModule):
 
         for d in self.dirt.values():
             d.update()
-        self.vacuum.update(self.assets)
+        self.vacuum.update()
 
     def render(self):
         self.screen.blit(self.background, (0, 0))
         for d in self.dirt.values():
-            d.render(self.assets, self.screen)
-        self.vacuum.render(self.assets, self.screen)
+            d.render(self.screen)
+        self.vacuum.render(self.screen)
         display.flip()
 
 
@@ -389,6 +417,7 @@ def main(model_path, board_image_path, algorithm):
         print()
         board_layout, start_dirt, start_pos, final_pos = ReadingBoardModule(model, board_image_path).run()
         path = SolvingModule(board_layout, start_dirt, start_pos, final_pos, algorithm).run()
+        print()
         MainGameModule(desktop_size, board_layout, path).run()
     except (GameQuit, KeyboardInterrupt):
         pass
