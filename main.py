@@ -336,7 +336,11 @@ class Vacuum:
     def pos(self, value):
         self.old_pos = self._pos
         self._pos = value
+        self.animation_state = 0
         self.move_clock.start()
+
+    def clean(self):
+        self.animation_state = 1
 
     def update(self):
         if self.frame_timer.tick():
@@ -432,6 +436,7 @@ class MainGameModule(BaseModule):
                 for x, d in enumerate(row):
                     if d < old_state.dirt[y, x]:
                         self.dirt[(x, y)].level = d
+                        self.vacuum.clean()
 
         for d in self.dirt.values():
             d.update()
