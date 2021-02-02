@@ -137,11 +137,15 @@ def moves(board_layout, state):
             yield move, State((new_x, new_y), state.dirt)
 
 
+class NoSolution(Exception):
+    pass
+
+
 def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
     if start_state == final_state:
         return None, 0
 
-    visited = {start_state: (None, None)}
+    visited = {start_state: (0, None, None)}
     frontier = deque()
     frontier.append(start_state)
     frontier_set = {start_state}
@@ -156,6 +160,7 @@ def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
     while frontier:
         state = frontier.pop() if lifo else frontier.popleft()
         frontier_set.discard(state)
+        cur_dist, _, _ = visited[state]
         for move, dest_state in moves(board_layout, state):
             if dest_state in visited or dest_state in frontier_set:
                 continue
@@ -165,14 +170,14 @@ def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
             if time_ns() > last_update + update_period:
                 last_update += update_period
                 update()
-            visited[dest_state] = move, state
+            visited[dest_state] = cur_dist+1, move, state
             if dest_state == final_state:
                 update()
                 print()
                 return visited
     update()
     print()
-    return None
+    raise NoSolution
 
 
 def informed_graph_search(board_layout, start_state, final_state, heuristic):
@@ -204,7 +209,30 @@ def informed_graph_search(board_layout, start_state, final_state, heuristic):
                     update()
     update()
     print()
-    return None
+    raise NoSolution
+
+
+def solution_path(nodes, final_state):
+    path = []
+    state = final_state
+    while True:
+        _, move, prev_state = nodes[state]
+        if move is None:
+            break
+        path.append((state, move))
+        state = prev_state
+    path.append((state, None))
+    path.reverse()
+    return path
+
+
+def print_path(layout, path, start_pos, final_pos):
+    for state, move in path:
+        if move is not None:
+            print()
+            print(move)
+        print_board(layout, start_pos, final_pos, state)
+    print()
 
 
 def print_board(layout, start_pos, final_pos, state):
@@ -250,54 +278,25 @@ def test():
 
     print("Uninformed (fifo) graph search")
     try:
-        visited = uninformed_graph_search(layout, start_state, final_state)
+        nodes = uninformed_graph_search(layout, start_state, final_state)
     except KeyboardInterrupt:
         print()
+    except NoSolution:
+        print("No solution found!")
     else:
-        if visited is None:
-            print("No solution found!")
-            return
-
-        path = []
-        state = final_state
-        while state != start_state:
-            move, prev_state = visited[state]
-            path.append((state, move))
-            state = prev_state
-        path.append((state, None))
-        path.reverse()
-
-        for state, move in path:
-            if move is not None:
-                print()
-                print(move)
-            print_board(layout, start_pos, final_pos, state)
-        print()
+        path = solution_path(nodes, final_state)
+        print_path(layout, path, start_pos, final_pos)
 
     print("Informed (A*) graph search")
     try:
-        expanded = informed_graph_search(layout, start_state, final_state, state_distance)
+        nodes = informed_graph_search(layout, start_state, final_state, state_distance)
     except KeyboardInterrupt:
         print()
+    except NoSolution:
+        print("No solution found!")
     else:
-        if expanded is None:
-            print("No solution found!")
-            return
-
-        path = []
-        state = final_state
-        while state != start_state:
-            _, move, prev_state = expanded[state]
-            path.append((state, move))
-            state = prev_state
-        path.append((state, None))
-        path.reverse()
-
-        for state, move in path:
-            if move is not None:
-                print()
-                print(move)
-            print_board(layout, start_pos, final_pos, state)
+        path = solution_path(nodes, final_state)
+        print_path(layout, path, start_pos, final_pos)
 
 
 if __name__ == "__main__":
