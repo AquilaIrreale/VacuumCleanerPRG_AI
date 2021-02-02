@@ -9,6 +9,7 @@ import pygame
 from pygame import display, transform, event, Color, Rect
 
 import assets
+import vision
 from vision import LetterRecognizerNN
 
 
@@ -173,19 +174,40 @@ class ModelLoadingModule(SplashScreenModule):
             return self.model
 
 
-def main(model_path, board_image, algorithm):
+class ReadingBoardModule(SplashScreenModule):
+    def __init__(self, model, board_image_path):
+        super().__init__("reading_board_splash.png")
+        self.model = model
+        self.board_image_path = board_image_path
+        self.board = None
+        self.thread = Thread(target=self.worker, daemon=True)
+
+    def worker(self):
+        self.board = vision.read_board(self.board_image_path, self.model)
+
+    def start(self):
+        super().start()
+        self.thread.start()
+
+    def update(self):
+        if not self.thread.is_alive():
+            return self.board
+
+
+def main(model_path, board_image_path, algorithm):
     display.init()
     try:
         model = ModelLoadingModule(model_path).run()
-        print(model)
+        board = ReadingBoardModule(model, board_image_path).run()
+        vision.print_board(board, model.labels)
     except (GameQuit, KeyboardInterrupt):
         pass
 
 
 if __name__ == "__main__":
-    _, model, board_image, *rest = sys.argv
+    _, model, board_image_path, *rest = sys.argv
     if len(rest) == 0:
         algorithm = "A*"
     else:
         algorithm, = rest
-    main(model, board_image, algorithm)
+    main(model, board_image_path, algorithm)
