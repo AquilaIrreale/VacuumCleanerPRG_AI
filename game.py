@@ -229,12 +229,17 @@ def solution_path(nodes, final_state):
     return path
 
 
-def print_path(layout, path, start_pos, final_pos):
+def print_path(layout, path):
+    try:
+        start_state, _ = path[0]
+        final_state, _ = path[-1]
+    except IndexError:
+        return
     for state, move in path:
         if move is not None:
             print()
             print(move)
-        print_board(layout, start_pos, final_pos, state)
+        print_board(layout, start_state.pos, final_state.pos, state)
     print()
 
 
@@ -288,7 +293,7 @@ def test():
         print("No solution found!")
     else:
         path = solution_path(nodes, final_state)
-        print_path(layout, path, start_pos, final_pos)
+        print_path(layout, path)
 
     print("Informed (A*) graph search")
     try:
@@ -299,7 +304,7 @@ def test():
         print("No solution found!")
     else:
         path = solution_path(nodes, final_state)
-        print_path(layout, path, start_pos, final_pos)
+        print_path(layout, path)
 
 
 if __name__ == "__main__":
