@@ -1,11 +1,13 @@
+import os
 import sys
 import time
+
 from functools import partial
 from importlib import resources
 from threading import Thread, Lock
 
 import pygame
-from pygame import display, transform, event, Color, Rect
+from pygame import display, transform, event, Color, Rect, Surface
 
 import game
 import vision
@@ -15,17 +17,28 @@ from game import State
 from vision import LetterRecognizerNN
 
 
+def get_display_size():
+    mode_info = display.Info()
+    return mode_info.current_w, mode_info.current_h
+
+
 set_mode_first_time = True
 
 def set_mode_if_needed(size):
     global set_mode_first_time
     if not set_mode_first_time:
-        mode_info = display.Info()
-        cur_size = (mode_info.current_w, mode_info.current_h)
+        cur_size = get_display_size()
         if cur_size == size:
             return display.get_surface()
 
     set_mode_first_time = False
+    display.quit()
+    display.init()
+    w, h = size
+    dw, dh = get_display_size()
+    x = (dw-w)//2
+    y = (dh-h)//2
+    os.environ["SDL_VIDEO_WINDOW_POS"] = f"{x},{y}"
     return display.set_mode(size)
 
 
