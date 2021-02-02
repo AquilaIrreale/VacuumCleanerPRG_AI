@@ -7,6 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from statistics import mean
 from itertools import product
+from contextlib import redirect_stdout
 
 import cv2
 import numpy as np
@@ -51,22 +52,22 @@ class LetterRecognizerNN:
             layer = layers.Reshape((28, 28, 1), input_shape=(784,))(input_cnn)
 
             # cnn layer
-            cnn1 = layers.Conv2D(32, (3, 3), 1, padding='same', activation='relu')(layer)
+            cnn1 = layers.Conv2D(32, (3, 3), 1, padding="same", activation="relu")(layer)
             # cnn layer
-            cnn2 = layers.Conv2D(64, (3, 3), 2, padding='same', activation='relu')(cnn1)
-            poll2 = layers.MaxPooling2D((2, 2), padding='same')(cnn2)
+            cnn2 = layers.Conv2D(64, (3, 3), 2, padding="same", activation="relu")(cnn1)
+            poll2 = layers.MaxPooling2D((2, 2), padding="same")(cnn2)
 
             # inception module
             # 1 layer
-            conv1_1 = layers.Conv2D(32, (1, 1), padding='same', activation='relu')(poll2)
-            conv1_2 = layers.Conv2D(32, (1, 1), padding='same', activation='relu')(poll2)
-            conv1_3 = layers.Conv2D(64, (3, 3), padding='same', activation='relu')(poll2)
-            pool_inception = layers.MaxPooling2D((3, 3), strides=(1, 1), padding='same')(conv1_3)
+            conv1_1 = layers.Conv2D(32, (1, 1), padding="same", activation="relu")(poll2)
+            conv1_2 = layers.Conv2D(32, (1, 1), padding="same", activation="relu")(poll2)
+            conv1_3 = layers.Conv2D(64, (3, 3), padding="same", activation="relu")(poll2)
+            pool_inception = layers.MaxPooling2D((3, 3), strides=(1, 1), padding="same")(conv1_3)
             # 2 layer
-            conv2_1 = layers.Conv2D(32, (1, 1), padding='same', activation='relu')(poll2)
-            conv2_2 = layers.Conv2D(32, (3, 3), padding='same', activation='relu')(conv1_1)
-            conv2_3 = layers.Conv2D(32, (5, 5), padding='same', activation='relu')(conv1_2)
-            conv2_4 = layers.Conv2D(32, (1, 1), padding='same', activation='relu')(pool_inception)
+            conv2_1 = layers.Conv2D(32, (1, 1), padding="same", activation="relu")(poll2)
+            conv2_2 = layers.Conv2D(32, (3, 3), padding="same", activation="relu")(conv1_1)
+            conv2_3 = layers.Conv2D(32, (5, 5), padding="same", activation="relu")(conv1_2)
+            conv2_4 = layers.Conv2D(32, (1, 1), padding="same", activation="relu")(pool_inception)
             # concatenate filters, assumes filters/channels last
             inception_layer = layers.concatenate([conv2_1, conv2_2, conv2_3, conv2_4], axis=-1)
 
@@ -120,47 +121,47 @@ class LetterRecognizerNN:
         loss = score[0]
         accuracy = score[1]
 
-        with open("report.md", "w") as f:
-            f.write("# Metriche\n")
-            f.write(f"loss: {loss}\n")
-            f.write(f"accuracy: {accuracy}\n\n")
-
         print("Test loss:", loss)
         print("Test accuracy:", accuracy)
 
-        pred_test_labels = self.model.predict(test_imgs)
-        pred_test_labels = np.argmax(pred_test_labels, axis=1)
+        if os.getenv("VACUUM_GENERATE_REPORT"):
+            with open("report.md", "w") as f, redirect_stdout(f):
+                print("# Metrics")
+                print(f"Loss: {loss}")
+                print(f"Accuracy: {accuracy}")
 
-        plt.imshow(confusion_matrix(test_labels, pred_test_labels), cmap=plt.cm.Blues)
-        plt.xlabel("Predicted labels")
-        plt.ylabel("True labels")
-        plt.title('Confusion matrix ')
-        plt.savefig("confusion_matrix.png")
-        plt.clf()
+            pred_test_labels = self.model.predict(test_imgs)
+            pred_test_labels = np.argmax(pred_test_labels, axis=1)
 
-        plt.plot(history.history["accuracy"])
-        plt.plot(history.history["val_accuracy"])
-        plt.title("Model accuracy")
-        plt.ylabel("Accuracy")
-        plt.xlabel("Epoch")
-        plt.legend(["Train", "Val"], loc="upper left")
-        plt.savefig("accuracy_chart.png")
-        plt.clf()
+            plt.imshow(confusion_matrix(test_labels, pred_test_labels), cmap=plt.cm.Blues)
+            plt.xlabel("Predicted labels")
+            plt.ylabel("True labels")
+            plt.title("Confusion matrix")
+            plt.savefig("confusion_matrix.png")
+            plt.clf()
 
-        plt.plot(history.history["loss"])
-        plt.plot(history.history["val_loss"])
-        plt.title("Model loss")
-        plt.ylabel("Loss")
-        plt.xlabel("Epoch")
-        plt.legend(["Train", "Val"], loc="upper left")
-        plt.savefig("loss_chart.png")
-        plt.clf()
+            plt.plot(history.history["accuracy"])
+            plt.plot(history.history["val_accuracy"])
+            plt.title("Model accuracy")
+            plt.ylabel("Accuracy")
+            plt.xlabel("Epoch")
+            plt.legend(["Train", "Val"], loc="upper left")
+            plt.savefig("accuracy_chart.png")
+            plt.clf()
 
-        try:
-            keras.utils.plot_model(nn.model, to_file="model.png", show_shapes=True)
-        except ImportError as e:
-            print("Cannot generate graphic representation of model (model.png):")
-            print("".join(e.args[0]))
+            plt.plot(history.history["loss"])
+            plt.plot(history.history["val_loss"])
+            plt.title("Model loss")
+            plt.ylabel("Loss")
+            plt.xlabel("Epoch")
+            plt.legend(["Train", "Val"], loc="upper left")
+            plt.savefig("loss_chart.png")
+            plt.clf()
+
+            try:
+                keras.utils.plot_model(nn.model, to_file="model.png", show_shapes=True)
+            except ImportError as e:
+                print("Could not generate graphic model representation (model.png):", "".join(e.args[0]))
 
     def predict(self, image):
         if len(image.shape) > 2:

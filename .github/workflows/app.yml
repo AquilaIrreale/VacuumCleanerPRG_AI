@@ -30,7 +30,7 @@ jobs:
           pipenv run dvc pull -r myremote
       - name: Run training
         run: |
-          pipenv run python vision.py train dataset
+          env VACUUM_GENERATE_REPORT=1 pipenv run python vision.py train dataset
       - name: Generate report
         env:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
