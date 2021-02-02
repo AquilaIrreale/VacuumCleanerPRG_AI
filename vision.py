@@ -2,18 +2,14 @@ import os
 import sys
 import gzip
 import math
-import random
 
 from io import BytesIO
 from pathlib import Path
 from statistics import mean
-from operator import itemgetter
 from itertools import product
-from contextlib import suppress
 
 import cv2
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 os.environ["KMP_AFFINITY"] = "noverbose"
