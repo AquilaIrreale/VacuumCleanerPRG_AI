@@ -257,14 +257,70 @@ class SolvingModule(SplashScreenModule):
             return self.path
 
 
+class MainGameModule(BaseModule):
+    def __init__(self, desktop_size, board_layout, path):
+        super().__init__(clock_freq=30)
+        self.desktop_size = desktop_size
+        self.board_layout = board_layout
+        self.path = path
+        self.screen = None
+        self.background = None
+
+    SIZE_FACT = .9 # Max window size relative to desktop
+
+    def start(self):
+        n, m = self.board_layout.shape
+        dw, dh = self.desktop_size
+        scale_factor = min(
+            int(dh * self.SIZE_FACT) // n // Assets.BASE_TILE_SIZE,
+            int(dw * self.SIZE_FACT) // m // Assets.BASE_TILE_SIZE)
+        self.assets = Assets(scale_factor)
+        h = self.assets.tile_size * n + scale_factor
+        w = self.assets.tile_size * m + scale_factor
+        self.screen = set_mode_if_needed((w, h))
+        self.background = Surface((w, h))
+        self.background.fill(Color(0, 0, 0))
+
+        start_state, _ = self.path[0]
+        final_state, _ = self.path[-1]
+
+        for y, row in enumerate(self.board_layout):
+            for x, cell in enumerate(row):
+                if (x, y) == start_state.pos:
+                    tile = self.assets.start_tile
+                elif (x, y) == final_state.pos:
+                    tile = self.assets.finish_tile
+                elif cell:
+                    tile = self.assets.default_tile
+                elif x > 0 and not self.board_layout[y, x-1]:
+                    tile = self.assets.wall_tile_mr
+                else:
+                    tile = self.assets.wall_tile_l
+                pos_x = x * self.assets.tile_size
+                pos_y = y * self.assets.tile_size
+                self.background.blit(tile, (pos_x, pos_y))
+
+    def event(self, e):
+        if e.type == pygame.QUIT:
+            raise GameQuit
+
+    def update(self):
+        pass
+
+    def render(self):
+        self.screen.blit(self.background, (0, 0))
+        display.flip()
+
+
 def main(model_path, board_image_path, algorithm):
     display.init()
+    desktop_size = get_display_size()
     try:
         model = ModelLoadingModule(model_path).run()
         print()
         board_layout, start_dirt, start_pos, final_pos = ReadingBoardModule(model, board_image_path).run()
         path = SolvingModule(board_layout, start_dirt, start_pos, final_pos, algorithm).run()
-        game.print_path(board_layout, path)
+        MainGameModule(desktop_size, board_layout, path).run()
     except (GameQuit, KeyboardInterrupt):
         pass
 
