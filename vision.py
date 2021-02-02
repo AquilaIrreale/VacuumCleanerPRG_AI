@@ -508,19 +508,16 @@ def read_board(file, model):
     image = cv2.warpPerspective(corrected_image, transform_matrix, (w, h), flags=cv2.INTER_LINEAR)
     visualize("Perspective correction of original image", image)
 
-    #image = cv2.morphologyEx(image, cv2.MORPH_CLOSE, square_kern(6))
-    #visualize("Morphological closing", image)
-
     classes = np.zeros((n, m), dtype=np.uint8)
 
-    cell_h = h//n
-    cell_w = w//m
+    cell_h = h/n
+    cell_w = w/m
     for i, j in product(range(n), range(m)):
-        cell_y = i*cell_h
-        cell_x = j*cell_w
+        cell_y = int(i*cell_h)
+        cell_x = int(j*cell_w)
         cell = image[
-                cell_y:cell_y+cell_h,
-                cell_x:cell_x+cell_w]
+                cell_y:cell_y+int(cell_h),
+                cell_x:cell_x+int(cell_w)]
         visualize("Grid cell", cell)
         cell = cv2.GaussianBlur(cell, (5, 5), 0)
         visualize("Gaussian blur", cell)
