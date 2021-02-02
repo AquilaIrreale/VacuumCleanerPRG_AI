@@ -271,8 +271,9 @@ class Dirt:
         pass
 
     def render(self, assets, dest_surf):
-        sprite = assets.dirt[self.level-1]
-        dest_surf.blit(sprite, assets.grid_pos(self.pos))
+        if self.level > 0:
+            sprite = assets.dirt[self.level-1]
+            dest_surf.blit(sprite, assets.grid_pos(self.pos))
 
 
 class Vacuum:
@@ -299,9 +300,11 @@ class MainGameModule(BaseModule):
         self.desktop_size = desktop_size
         self.board_layout = board_layout
         self.path = path
+        self.path_index = 0
+        self.state_advance_timer = Timer()
         self.screen = None
         self.background = None
-        self.dirt = []
+        self.dirt = {}
         self.vacuum = None
 
     SIZE_FACT = .9 # Max window size relative to desktop
@@ -340,22 +343,39 @@ class MainGameModule(BaseModule):
 
                 dirt_level = start_state.dirt[y, x]
                 if dirt_level:
-                    self.dirt.append(Dirt((x, y), dirt_level))
+                    self.dirt[(x, y)] = Dirt((x, y), dirt_level)
 
         self.vacuum = Vacuum(start_state.pos)
+        self.state_advance_timer.set(1500)
 
     def event(self, e):
         if e.type == pygame.QUIT:
             raise GameQuit
 
     def update(self):
-        for d in self.dirt:
+        if self.state_advance_timer.tick():
+            try:
+                old_state, _ = self.path[self.path_index]
+                self.path_index += 1
+                new_state, move = self.path[self.path_index]
+            except IndexError as e:
+                return
+
+            if new_state.pos != old_state.pos:
+                self.vacuum.pos = new_state.pos
+
+            for y, row in enumerate(new_state.dirt):
+                for x, d in enumerate(row):
+                    if d < old_state.dirt[y, x]:
+                        self.dirt[(x, y)].level = d
+
+        for d in self.dirt.values():
             d.update()
         self.vacuum.update(self.assets)
 
     def render(self):
         self.screen.blit(self.background, (0, 0))
-        for d in self.dirt:
+        for d in self.dirt.values():
             d.render(self.assets, self.screen)
         self.vacuum.render(self.assets, self.screen)
         display.flip()
