@@ -10,6 +10,8 @@ from itertools import product
 
 import cv2
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 os.environ["KMP_AFFINITY"] = "noverbose"
