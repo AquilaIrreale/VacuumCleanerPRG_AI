@@ -226,6 +226,7 @@ class ReadingBoardModule(SplashScreenModule):
 
     def worker(self):
         board = vision.read_board(self.board_image_path, self.model)
+        vision.print_board(board, self.model.labels)
         self.board_data = game.parse_board(self.model.labels, board)
 
     def start(self):
