@@ -65,14 +65,17 @@ class State:
         return f"State({self.pos!r}, {self.dirt!r})"
 
 
-def parse_board(classes_file, board):
+def parse_board(classes_or_labels, board):
     board = np.array(board)
 
-    classes = {}
-    with open(classes_file) as f:
-        for line in f:
-            num, label = line.split()
-            classes[label] = int(num)
+    if isinstance(classes_or_labels, dict):
+        classes = dict((v, k) for k, v in classes_or_labels.items())
+    else:
+        classes = {}
+        with open(classes_or_labels) as f:
+            for line in f:
+                num, label = line.split()
+                classes[label] = int(num)
 
     not_wall = np.vectorize(lambda x: x != classes["X"])
     board_layout = not_wall(board)
