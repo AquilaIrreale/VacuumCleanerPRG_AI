@@ -13,6 +13,20 @@ import vision
 from vision import LetterRecognizerNN
 
 
+set_mode_first_time = True
+
+def set_mode_if_needed(size):
+    global set_mode_first_time
+    if not set_mode_first_time:
+        mode_info = display.Info()
+        cur_size = (mode_info.current_w, mode_info.current_h)
+        if cur_size == size:
+            return display.get_surface()
+
+    set_mode_first_time = False
+    return display.set_mode(size)
+
+
 class Timer:
     def __init__(self):
         self.target = None
@@ -143,7 +157,7 @@ class SplashScreenModule(BaseModule):
         with resources.open_binary(assets, self.splash_image_asset) as f:
             splash_surface = pygame.image.load(f)
         size = splash_surface.get_size()
-        screen = display.set_mode(size)
+        screen = set_mode_if_needed(size)
         screen.blit(splash_surface, (0, 0))
         display.flip()
 
