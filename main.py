@@ -2,15 +2,18 @@
 
 import sys
 import time
+from functools import partial
 from importlib import resources
 from threading import Thread, Lock
 
 import pygame
 from pygame import display, transform, event, Color, Rect
 
-import assets
 import game
 import vision
+import assets
+
+from game import State
 from vision import LetterRecognizerNN
 
 
@@ -210,16 +213,47 @@ class ReadingBoardModule(SplashScreenModule):
             return self.board_data
 
 
+class SolvingModule(SplashScreenModule):
+    def __init__(self, board_layout, start_dirt, start_pos, final_pos, algorithm):
+        super().__init__("solving_splash.png")
+        self.board_layout = board_layout
+        self.start_dirt = start_dirt
+        self.start_pos = start_pos
+        self.final_pos = final_pos
+        self.algorithm = algorithm
+        self.path = None
+        self.thread = Thread(target=self.worker, daemon=True)
+
+    algorithms = {
+        "bfs": partial(game.uninformed_graph_search, lifo=True),
+        "dfs": partial(game.uninformed_graph_search, lifo=False),
+        "a*":  partial(game.informed_graph_search, heuristic=game.state_distance)
+    }
+
+    def worker(self):
+        solve = self.algorithms[self.algorithm.casefold()]
+        start_state = State(self.start_pos, self.start_dirt)
+        final_state = State(self.final_pos, self.start_dirt*0)
+        nodes = solve(self.board_layout, start_state, final_state)
+        self.path = game.solution_path(nodes, final_state)
+
+    def start(self):
+        super().start()
+        self.thread.start()
+
+    def update(self):
+        if not self.thread.is_alive():
+            return self.path
+
+
 def main(model_path, board_image_path, algorithm):
     display.init()
     try:
         model = ModelLoadingModule(model_path).run()
         print()
-        board_layout, dirt, start_pos, final_pos = ReadingBoardModule(model, board_image_path).run()
-        print(board_layout)
-        print(dirt)
-        print(start_pos)
-        print(final_pos)
+        board_layout, start_dirt, start_pos, final_pos = ReadingBoardModule(model, board_image_path).run()
+        path = SolvingModule(board_layout, start_dirt, start_pos, final_pos, algorithm).run()
+        game.print_path(board_layout, path)
     except (GameQuit, KeyboardInterrupt):
         pass
 
