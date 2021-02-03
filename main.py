@@ -6,7 +6,7 @@ import random
 from functools import partial
 from itertools import product
 from importlib import resources
-from threading import Thread, Lock
+from threading import Thread
 
 import pygame
 from pygame import display, transform, event, Color, Rect, Surface
@@ -209,6 +209,7 @@ class ModelLoadingModule(SplashScreenModule):
 
     def start(self):
         super().start()
+        display.set_caption("Loading...")
         self.thread.start()
 
     def update(self):
@@ -227,10 +228,12 @@ class ReadingBoardModule(SplashScreenModule):
     def worker(self):
         board = vision.read_board(self.board_image_path, self.model)
         vision.print_board(board, self.model.labels)
+        print()
         self.board_data = game.parse_board(self.model.labels, board)
 
     def start(self):
         super().start()
+        display.set_caption("Reading board...")
         self.thread.start()
 
     def update(self):
@@ -264,6 +267,7 @@ class SolvingModule(SplashScreenModule):
 
     def start(self):
         super().start()
+        display.set_caption("Solving...")
         self.thread.start()
 
     def update(self):
@@ -388,6 +392,7 @@ class MainGameModule(BaseModule):
         h = self.assets.tile_size * n + scale_factor
         w = self.assets.tile_size * m + scale_factor
         self.screen = set_mode_if_needed((w, h))
+        display.set_caption("VacuumCleaner - Playing solution")
         self.background = Surface((w, h))
         self.background.fill(Color(0, 0, 0))
 
