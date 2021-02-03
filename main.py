@@ -374,6 +374,7 @@ class MainGameModule(BaseModule):
         self.board_layout = board_layout
         self.path = path
         self.path_index = 0
+        self.path_step = 1
         self.state_advance_timer = Timer()
         self.screen = None
         self.background = None
@@ -425,22 +426,24 @@ class MainGameModule(BaseModule):
     def event(self, e):
         if e.type == pygame.QUIT:
             raise GameQuit
+        elif e.type == pygame.KEYDOWN and e.key == pygame.K_r:
+            self.path_step = -self.path_step
 
     def update(self):
         if self.state_advance_timer.tick():
-            try:
-                old_state, _ = self.path[self.path_index]
-                self.path_index += 1
-                new_state, move = self.path[self.path_index]
-            except IndexError as e:
+            old_state, _ = self.path[self.path_index]
+            new_index = self.path_index + self.path_step
+            if new_index not in range(len(self.path)):
                 return
+            self.path_index = new_index
+            new_state, move = self.path[new_index]
 
             if new_state.pos != old_state.pos:
                 self.vacuum.pos = new_state.pos
 
             for y, row in enumerate(new_state.dirt):
                 for x, d in enumerate(row):
-                    if d < old_state.dirt[y, x]:
+                    if d != old_state.dirt[y, x]:
                         self.dirt[(x, y)].level = d
                         self.vacuum.clean()
 
