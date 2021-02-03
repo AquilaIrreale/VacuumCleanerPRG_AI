@@ -177,6 +177,7 @@ def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
             if dest_state == final_state:
                 update()
                 print()
+                print(f"Solution cost: {cur_dist+1}")
                 return visited
     update()
     print()
@@ -197,11 +198,12 @@ def informed_graph_search(board_layout, start_state, final_state, heuristic):
 
     while frontier:
         _, state = frontier.pop()
+        cur_cost, _, _ = expanded[state]
         if state == final_state:
             update()
             print()
+            print(f"Solution cost: {cur_cost}")
             return expanded
-        cur_cost, _, _ = expanded[state]
         for move, dest_state in moves(board_layout, state):
             dest_cost, _, _ = expanded[dest_state]
             if cur_cost + 1 < dest_cost:
