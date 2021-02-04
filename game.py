@@ -145,10 +145,9 @@ class NoSolution(Exception):
 
 
 def uninformed_graph_search(board_layout, start_state, final_state, lifo=False):
-    if start_state == final_state:
-        return None, 0
-
     visited = {start_state: (0, None, None)}
+    if start_state == final_state:
+        return visited
     frontier = deque()
     frontier.append(start_state)
     frontier_set = {start_state}
