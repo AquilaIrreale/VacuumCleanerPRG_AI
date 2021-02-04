@@ -428,6 +428,8 @@ class StatusBar:
         self.area = area
         self._text = ""
         self._text_surf = None
+        self._right_text = ""
+        self._right_text_surf = None
 
         x, y, w, h = area
         self.padding = int(h*.25)
@@ -443,15 +445,31 @@ class StatusBar:
         self._text = value
         self._text_surf = None
 
+    @property
+    def right_text(self):
+        return self._right_text
+
+    @text.setter
+    def right_text(self, value):
+        self._right_text = value
+        self._right_text_surf = None
+
+    def render_text(self, text):
+        return self.font.render(
+                text, True, Color(0, 0, 0), Color(255, 255, 255))
+
     def render(self, dest_surf):
-        dest_surf.fill(Color(255, 255, 255), self.area)
-        if not self._text:
-            return
         x, y, w, h = self.area
-        if self._text_surf is None:
-            self._text_surf = self.font.render(
-                    self._text, True, Color(0, 0, 0), Color(255, 255, 255))
-        dest_surf.blit(self._text_surf, (x+self.padding, y+self.padding))
+        dest_surf.fill(Color(255, 255, 255), self.area)
+        if self._right_text:
+            if self._right_text_surf is None:
+                self._right_text_surf = self.render_text(self._right_text)
+            tw, th = self._right_text_surf.get_size()
+            dest_surf.blit(self._right_text_surf, (x+w-tw-self.padding, y+self.padding))
+        if self._text:
+            if self._text_surf is None:
+                self._text_surf = self.render_text(self._text)
+            dest_surf.blit(self._text_surf, (x+self.padding, y+self.padding))
 
 
 class MainGameModule(BaseModule):
@@ -463,6 +481,7 @@ class MainGameModule(BaseModule):
         self.path_index = 0
         self.path_step = 1
         self.time_controller = TimeController()
+        self.speed_changed = True
         self.state_advance_timer = Timer(self.time_controller.time)
         self.screen = None
         self.background = None
@@ -525,16 +544,18 @@ class MainGameModule(BaseModule):
                 self.state_advance_timer.toggle()
             elif e.key == pygame.K_PLUS:
                 self.time_controller.change_speed(1)
+                self.speed_changed = True
             elif e.key == pygame.K_MINUS:
                 self.time_controller.change_speed(-1)
+                self.speed_changed = True
 
     def update(self):
-        if self.state_advance_timer.tick():
+        while self.state_advance_timer.tick():
             old_state, old_move = self.path[self.path_index]
             new_index = self.path_index + self.path_step
             if new_index not in range(len(self.path)):
                 self.bar.text = None
-                return
+                break
             self.path_index = new_index
             new_state, move = self.path[new_index]
 
@@ -548,6 +569,13 @@ class MainGameModule(BaseModule):
                     if d != old_state.dirt[y, x]:
                         self.dirt[(x, y)].level = d
                         self.vacuum.clean()
+
+        if self.speed_changed:
+            speed = self.time_controller.speed
+            if isinstance(self.time_controller.speed, Fraction):
+                speed = round(float(speed), 2)
+            self.bar.right_text = f"{speed}x"
+            self.speed_changed = False
 
         for d in self.dirt.values():
             d.update()
