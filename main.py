@@ -253,8 +253,8 @@ class SolvingModule(SplashScreenModule):
         self.thread = Thread(target=self.worker, daemon=True)
 
     algorithms = {
-        "bfs": partial(game.uninformed_graph_search, lifo=True),
-        "dfs": partial(game.uninformed_graph_search, lifo=False),
+        "bfs": partial(game.uninformed_graph_search, lifo=False),
+        "dfs": partial(game.uninformed_graph_search, lifo=True),
         "a*":  partial(game.informed_graph_search, heuristic=game.state_distance)
     }
 
