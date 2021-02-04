@@ -4,6 +4,7 @@ import time
 import math
 import random
 
+from fractions import Fraction
 from functools import partial
 from itertools import product
 from importlib import resources
@@ -19,6 +20,10 @@ import assets
 
 from game import State
 from vision import LetterRecognizerNN
+
+
+def time_ms():
+    return time.time_ns() // 1_100_000
 
 
 def get_display_size():
@@ -46,19 +51,54 @@ def set_mode_if_needed(size):
     return display.set_mode(size)
 
 
-class Timer:
+class TimeController:
+    speeds = (
+        Fraction(12, 100),
+        Fraction(25, 100),
+        Fraction( 1,   3),
+        Fraction(50, 100),
+        Fraction( 2,   3),
+        1,
+        Fraction( 3,   2),
+        2, 3, 4, 8, 16)
+
     def __init__(self):
+        self.speed = 1
+        self.speed_index = self.speeds.index(self.speed)
+        self.last_reading = None
+        self.timestamp = None
+
+    def change_speed(self, step=1):
+        self.speed_index = max(0, self.speed_index + step)
+        self.speed_index = min(len(self.speeds)-1, self.speed_index)
+        self.speed = self.speeds[self.speed_index]
+
+    def time(self):
+        if self.last_reading is None:
+            self.last_reading = time_ms()
+            self.timestamp = self.last_reading
+        else:
+            t = time_ms()
+            dt = t - self.last_reading
+            self.last_reading = t
+            self.timestamp += int(dt * self.speed)
+        return self.timestamp
+
+
+class Timer:
+    def __init__(self, time_provider=time_ms):
+        self.time = time_provider
         self.target = None
         self.period = None
 
-    def set(self, period_ms):
-        self.period = period_ms * 10**6
+    def set(self, period):
+        self.period = period
 
     def stop(self):
         self.target = math.inf
 
     def start(self):
-        self.target = time.time_ns() + self.period
+        self.target = self.time() + self.period
 
     def toggle(self):
         if math.isinf(self.target):
@@ -67,27 +107,28 @@ class Timer:
             self.stop()
 
     def tick(self):
-        if time.time_ns() < self.target:
+        if self.time() < self.target:
             return False
         self.target += self.period
         return True
 
 
 class Clock:
-    def __init__(self, freq=None, period=None):
+    def __init__(self, freq=None, period=None, time_provider=time_ms):
+        self.time = time_provider
         self.target = 0
         if freq is not None:
-            self.period = 10**9 // freq
+            self.period = 1000 // freq
         elif period is not None:
-            self.period = period * 10**6
+            self.period = period
         else:
             raise TypeError("Either freq or period must be specified")
 
     def start(self):
-        self.target = time.time_ns() + self.period
+        self.target = self.time() + self.period
 
     def time_remaining(self):
-        t = (self.target - time.time_ns()) // 10**6
+        t = self.target - self.time()
         return t if t >= 0 else 0
 
     def advance(self):
@@ -289,13 +330,13 @@ class SolvingModule(SplashScreenModule):
 
 
 class Dirt:
-    def __init__(self, assets, pos, level):
+    def __init__(self, assets, pos, level, time_provider):
         self.assets = assets
         self.pos = pos
         self._level = level
         self.sprite = assets.dirt[level].copy()
         self.sprite.set_colorkey(Color(255, 0, 255))
-        self.animation_timer = Timer()
+        self.animation_timer = Timer(time_provider)
         self.animation_coords = [(x, y) for x, y in product(range(16), repeat=2)]
         self.animation_index = len(self.animation_coords)
         random.shuffle(self.animation_coords)
@@ -328,14 +369,14 @@ class Dirt:
 
 
 class Vacuum:
-    def __init__(self, assets, pos):
+    def __init__(self, assets, pos, time_provider):
         self.assets = assets
         self._pos = pos
         self.old_pos = pos
         self.frame_timer = Timer()
         self.frame_timer.set(500)
         self.frame_timer.start()
-        self.move_clock = Clock(period=1000)
+        self.move_clock = Clock(period=1000, time_provider=time_provider)
         self.animation_state = 0
         self.animation_frame = 0
 
@@ -421,7 +462,8 @@ class MainGameModule(BaseModule):
         self.path = path
         self.path_index = 0
         self.path_step = 1
-        self.state_advance_timer = Timer()
+        self.time_controller = TimeController()
+        self.state_advance_timer = Timer(self.time_controller.time)
         self.screen = None
         self.background = None
         self.dirt = {}
@@ -466,10 +508,10 @@ class MainGameModule(BaseModule):
 
                 dirt_level = start_state.dirt[y, x]
                 if dirt_level:
-                    self.dirt[(x, y)] = Dirt(self.assets, (x, y), dirt_level)
+                    self.dirt[(x, y)] = Dirt(self.assets, (x, y), dirt_level, self.time_controller.time)
 
         self.bar = StatusBar(Rect(0, h-self.BAR_HEIGHT, w, self.BAR_HEIGHT))
-        self.vacuum = Vacuum(self.assets, start_state.pos)
+        self.vacuum = Vacuum(self.assets, start_state.pos, self.time_controller.time)
         self.state_advance_timer.set(1500)
         self.state_advance_timer.start()
 
@@ -481,6 +523,10 @@ class MainGameModule(BaseModule):
                 self.path_step = -self.path_step
             elif e.key == pygame.K_SPACE:
                 self.state_advance_timer.toggle()
+            elif e.key == pygame.K_PLUS:
+                self.time_controller.change_speed(1)
+            elif e.key == pygame.K_MINUS:
+                self.time_controller.change_speed(-1)
 
     def update(self):
         if self.state_advance_timer.tick():
