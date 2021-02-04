@@ -58,28 +58,18 @@ class LetterRecognizerNN:
             poll2 = layers.MaxPooling2D((2, 2), padding="same")(cnn2)
 
             # inception module
-            # 1 layer
-            conv1_1 = layers.Conv2D(32, (1, 1), padding="same", activation="relu")(poll2)
-            conv1_2 = layers.Conv2D(32, (1, 1), padding="same", activation="relu")(poll2)
-            conv1_3 = layers.Conv2D(64, (3, 3), padding="same", activation="relu")(poll2)
-            pool_inception = layers.MaxPooling2D((3, 3), strides=(1, 1), padding="same")(conv1_3)
-            # 2 layer
-            conv2_1 = layers.Conv2D(32, (1, 1), padding="same", activation="relu")(poll2)
-            conv2_2 = layers.Conv2D(32, (3, 3), padding="same", activation="relu")(conv1_1)
-            conv2_3 = layers.Conv2D(32, (5, 5), padding="same", activation="relu")(conv1_2)
-            conv2_4 = layers.Conv2D(32, (1, 1), padding="same", activation="relu")(pool_inception)
-            # concatenate filters, assumes filters/channels last
-            inception_layer = layers.concatenate([conv2_1, conv2_2, conv2_3, conv2_4], axis=-1)
-
+            inception_layer = LetterRecognizerNN._inception_module(poll2, 32, 16, 32, 64, 32, 32)
             # average for spatial data, remove spatial information and put the look into the feature maps, reduce computation and overfitting
             avg = layers.GlobalAveragePooling2D()(inception_layer)
 
             # mlp
             dense1 = layers.Dense(128, activation="relu")(avg)
-            drop1 = layers.Dropout(.5)(dense1)
+            drop1 = layers.Dropout(.3)(dense1)
             dense2 = layers.Dense(64, activation="relu")(drop1)
-            drop2 = layers.Dropout(.5)(dense2)
-            output = layers.Dense(6, activation="softmax")(drop2)
+            drop2 = layers.Dropout(.3)(dense2)
+            dense3 = layers.Dense(32, activation="relu")(drop2)
+            drop3 = layers.Dropout(.3)(dense3)
+            output = layers.Dense(6, activation="softmax")(drop3)
 
             self.model = Model(inputs=input_cnn, outputs=output)
             self.model.compile(
@@ -89,7 +79,21 @@ class LetterRecognizerNN:
 
         self.model.summary()
 
-    def train(self, dataset_path, model_path=None, batch_size=128, epochs=15):
+    @staticmethod
+    def _inception_module(input, l1_1, l1_2, l2_1, l2_2, l2_3, l2_4):
+        conv1_1 = layers.Conv2D(l1_1, (1, 1), padding="same", activation="relu")(input)
+        conv1_2 = layers.Conv2D(l1_2, (1, 1), padding="same", activation="relu")(input)
+        max_poll = layers.MaxPooling2D((3, 3), strides=(1, 1), padding="same")(input)
+        # 2 layer
+        conv2_1 = layers.Conv2D(l2_1, (1, 1), padding="same", activation="relu")(input)
+        conv2_2 = layers.Conv2D(l2_2, (3, 3), padding="same", activation="relu")(conv1_1)
+        conv2_3 = layers.Conv2D(l2_3, (5, 5), padding="same", activation="relu")(conv1_2)
+        conv2_4 = layers.Conv2D(l2_4, (1, 1), padding="same", activation="relu")(max_poll)
+        # concatenate filters, assumes filters/channels last
+        inception_layer = layers.concatenate([conv2_1, conv2_2, conv2_3, conv2_4], axis=-1)
+        return inception_layer
+
+    def train(self, dataset_path, model_path=None, batch_size=128, epochs=20):
         dataset_path = Path(dataset_path)
         self.labels = parse_labels(dataset_path/"classes")
 
