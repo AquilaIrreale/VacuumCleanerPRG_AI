@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import math
 import random
 
 from functools import partial
@@ -51,7 +52,18 @@ class Timer:
 
     def set(self, period_ms):
         self.period = period_ms * 10**6
+
+    def stop(self):
+        self.target = math.inf
+
+    def start(self):
         self.target = time.time_ns() + self.period
+
+    def toggle(self):
+        if math.isinf(self.target):
+            self.start()
+        else:
+            self.stop()
 
     def tick(self):
         if time.time_ns() < self.target:
@@ -296,6 +308,7 @@ class Dirt:
         self._level = value
         self.animation_index = 0
         self.animation_timer.set(1000//len(self.animation_coords))
+        self.animation_timer.start()
 
     def update(self):
         while (self.animation_index < len(self.animation_coords)
@@ -320,6 +333,7 @@ class Vacuum:
         self.old_pos = pos
         self.frame_timer = Timer()
         self.frame_timer.set(500)
+        self.frame_timer.start()
         self.move_clock = Clock(period=1000)
         self.animation_state = 0
         self.animation_frame = 0
@@ -422,12 +436,16 @@ class MainGameModule(BaseModule):
 
         self.vacuum = Vacuum(self.assets, start_state.pos)
         self.state_advance_timer.set(1500)
+        self.state_advance_timer.start()
 
     def event(self, e):
         if e.type == pygame.QUIT:
             raise GameQuit
-        elif e.type == pygame.KEYDOWN and e.key == pygame.K_r:
-            self.path_step = -self.path_step
+        elif e.type == pygame.KEYDOWN:
+            if e.key == pygame.K_r:
+                self.path_step = -self.path_step
+            elif e.key == pygame.K_SPACE:
+                self.state_advance_timer.toggle()
 
     def update(self):
         if self.state_advance_timer.tick():
