@@ -10,7 +10,8 @@ from importlib import resources
 from threading import Thread
 
 import pygame
-from pygame import display, transform, event, Color, Rect, Surface
+from pygame import display, transform, event, font, Color, Rect, Surface
+from pygame.font import Font
 
 import game
 import vision
@@ -381,6 +382,37 @@ class Vacuum:
         dest_surf.blit(frames[self.animation_frame], (x, y))
 
 
+class StatusBar:
+    def __init__(self, area):
+        self.area = area
+        self._text = ""
+        self._text_surf = None
+
+        x, y, w, h = area
+        self.padding = int(h*.25)
+        with resources.path(assets, "0xA000-Squareish-Mono-Bold.ttf") as font_path:
+            self.font = Font(font_path, h - self.padding*2)
+
+    @property
+    def text(self):
+        return self._text
+
+    @text.setter
+    def text(self, value):
+        self._text = value
+        self._text_surf = None
+
+    def render(self, dest_surf):
+        dest_surf.fill(Color(255, 255, 255), self.area)
+        if not self._text:
+            return
+        x, y, w, h = self.area
+        if self._text_surf is None:
+            self._text_surf = self.font.render(
+                    self._text, True, Color(0, 0, 0), Color(255, 255, 255))
+        dest_surf.blit(self._text_surf, (x+self.padding, y+self.padding))
+
+
 class MainGameModule(BaseModule):
     def __init__(self, desktop_size, board_layout, path):
         super().__init__(clock_freq=60)
@@ -394,17 +426,19 @@ class MainGameModule(BaseModule):
         self.background = None
         self.dirt = {}
         self.vacuum = None
+        self.bar = None
 
-    SIZE_FACT = .9 # Max window size relative to desktop
+    SIZE_FACT  = .9 # Max window size relative to desktop
+    BAR_HEIGHT = 64 # Height of status bar
 
     def start(self):
         n, m = self.board_layout.shape
         dw, dh = self.desktop_size
         scale_factor = min(
-            int(dh * self.SIZE_FACT) // n // Assets.BASE_TILE_SIZE,
-            int(dw * self.SIZE_FACT) // m // Assets.BASE_TILE_SIZE)
+            int((dh-self.BAR_HEIGHT) * self.SIZE_FACT) // n // Assets.BASE_TILE_SIZE,
+            int((dw-self.BAR_HEIGHT) * self.SIZE_FACT) // m // Assets.BASE_TILE_SIZE)
         self.assets = Assets(scale_factor)
-        h = self.assets.tile_size * n + scale_factor
+        h = self.assets.tile_size * n + scale_factor + self.BAR_HEIGHT
         w = self.assets.tile_size * m + scale_factor
         self.screen = set_mode_if_needed((w, h))
         display.set_caption("VacuumCleaner - Playing solution")
@@ -434,6 +468,7 @@ class MainGameModule(BaseModule):
                 if dirt_level:
                     self.dirt[(x, y)] = Dirt(self.assets, (x, y), dirt_level)
 
+        self.bar = StatusBar(Rect(0, h-self.BAR_HEIGHT, w, self.BAR_HEIGHT))
         self.vacuum = Vacuum(self.assets, start_state.pos)
         self.state_advance_timer.set(1500)
         self.state_advance_timer.start()
@@ -449,12 +484,15 @@ class MainGameModule(BaseModule):
 
     def update(self):
         if self.state_advance_timer.tick():
-            old_state, _ = self.path[self.path_index]
+            old_state, old_move = self.path[self.path_index]
             new_index = self.path_index + self.path_step
             if new_index not in range(len(self.path)):
+                self.bar.text = None
                 return
             self.path_index = new_index
             new_state, move = self.path[new_index]
+
+            self.bar.text = move if self.path_step > 0 else old_move
 
             if new_state.pos != old_state.pos:
                 self.vacuum.pos = new_state.pos
@@ -474,11 +512,13 @@ class MainGameModule(BaseModule):
         for d in self.dirt.values():
             d.render(self.screen)
         self.vacuum.render(self.screen)
+        self.bar.render(self.screen)
         display.flip()
 
 
 def main(model_path, board_image_path, algorithm):
     display.init()
+    font.init()
     desktop_size = get_display_size()
     try:
         model = ModelLoadingModule(model_path).run()
