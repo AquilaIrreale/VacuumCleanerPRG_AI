@@ -6,7 +6,7 @@ import math
 from io import BytesIO
 from pathlib import Path
 from statistics import mean
-from itertools import product
+from itertools import product, count
 from contextlib import redirect_stdout
 
 import cv2
@@ -200,8 +200,16 @@ def adjacent_pairs(seq):
     yield val1, first_val
 
 
-debug_output = False
+debug_output = os.getenv("VACUUM_PREPROCESS_DEBUG_WINDOW")
+debug_dir = os.getenv("VACUUM_PREPROCESS_DEBUG_DIR")
+if debug_dir:
+    debug_dir = Path(debug_dir)
+    debug_dir.mkdir(exist_ok=True)
+visualize_index = count()
+
 def visualize(title, image):
+    if debug_dir:
+        cv2.imwrite(str(debug_dir/f"{next(visualize_index):04}.png"), image)
     if debug_output:
         cv2.imshow("visualize-window", image)
         cv2.setWindowTitle("visualize-window", title)
