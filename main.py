@@ -556,7 +556,9 @@ class MainGameModule(BaseModule):
         if e.type == pygame.QUIT:
             raise GameQuit
         elif e.type == pygame.KEYDOWN:
-            if e.key == pygame.K_r:
+            if e.key == pygame.K_q:
+                raise GameQuit
+            elif e.key == pygame.K_r:
                 self.path_step = -self.path_step
                 self.mode_changed = True
             elif e.key == pygame.K_SPACE:
