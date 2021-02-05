@@ -49,21 +49,25 @@ class LetterRecognizerNN:
         else:
             input_cnn = layers.Input(shape=(784,))
 
-            layer = layers.Reshape((28, 28, 1), input_shape=(784,))(input_cnn)
+            reshaped = layers.Reshape((28, 28, 1), input_shape=(784,))(input_cnn)
 
-            # cnn layer
-            cnn1 = layers.Conv2D(32, (3, 3), 1, padding="same", activation="relu")(layer)
-            # cnn layer
+            # cnn layers
+            cnn0 = layers.Conv2D(16, (3, 3), 1, activation="relu")(reshaped)
+            cnn1 = layers.Conv2D(32, (3, 3), 1, activation="relu")(cnn0)
             cnn2 = layers.Conv2D(64, (3, 3), 2, padding="same", activation="relu")(cnn1)
             poll2 = layers.MaxPooling2D((2, 2), padding="same")(cnn2)
 
             # inception module
             inception_layer = LetterRecognizerNN._inception_module(poll2, 32, 16, 32, 64, 32, 32)
+
+            # se module
+            se_layer = LetterRecognizerNN._se_module(inception_layer, 160)
+
             # average for spatial data, remove spatial information and put the look into the feature maps, reduce computation and overfitting
-            avg = layers.GlobalAveragePooling2D()(inception_layer)
+            avg = layers.GlobalAveragePooling2D()(se_layer)
 
             # mlp
-            dense1 = layers.Dense(128, activation="relu")(avg)
+            dense1 = layers.Dense(64, activation="relu")(avg)
             drop1 = layers.Dropout(.3)(dense1)
             dense2 = layers.Dense(64, activation="relu")(drop1)
             drop2 = layers.Dropout(.3)(dense2)
@@ -78,6 +82,14 @@ class LetterRecognizerNN:
                     metrics=["accuracy"])
 
         self.model.summary()
+
+    @staticmethod
+    def _se_module(input, levels, factor=16):
+        x = layers.GlobalAveragePooling2D()(input)
+        x = layers.Dense(levels//factor, activation="relu")(x)
+        x = layers.Dense(levels, activation="sigmoid")(x)
+        se_layer = layers.Multiply()([input, x])
+        return se_layer
 
     @staticmethod
     def _inception_module(input, l1_1, l1_2, l2_1, l2_2, l2_3, l2_4):
