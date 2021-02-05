@@ -101,10 +101,13 @@ class Timer:
         self.target = self.time() + self.period
 
     def toggle(self):
-        if math.isinf(self.target):
-            self.start()
-        else:
+        if self.running():
             self.stop()
+        else:
+            self.start()
+
+    def running(self):
+        return not math.isinf(self.target)
 
     def tick(self):
         if self.time() < self.target:
@@ -426,8 +429,8 @@ class Vacuum:
 class StatusBar:
     def __init__(self, area):
         self.area = area
-        self._text = ""
-        self._text_surf = None
+        self._left_text = ""
+        self._left_text_surf = None
         self._right_text = ""
         self._right_text_surf = None
 
@@ -437,19 +440,28 @@ class StatusBar:
             self.font = Font(font_path, h - self.padding*2)
 
     @property
-    def text(self):
-        return self._text
+    def left_text(self):
+        return self._left_text
 
-    @text.setter
-    def text(self, value):
-        self._text = value
-        self._text_surf = None
+    @left_text.setter
+    def left_text(self, value):
+        self._left_text = value
+        self._left_text_surf = None
+
+    @property
+    def center_text(self):
+        return self._center_text
+
+    @center_text.setter
+    def center_text(self, value):
+        self._center_text = value
+        self._center_text_surf = None
 
     @property
     def right_text(self):
         return self._right_text
 
-    @text.setter
+    @right_text.setter
     def right_text(self, value):
         self._right_text = value
         self._right_text_surf = None
@@ -461,15 +473,20 @@ class StatusBar:
     def render(self, dest_surf):
         x, y, w, h = self.area
         dest_surf.fill(Color(255, 255, 255), self.area)
+        if self._center_text:
+            if self._center_text_surf is None:
+                self._center_text_surf = self.render_text(self._center_text)
+            tw, th = self._center_text_surf.get_size()
+            dest_surf.blit(self._center_text_surf, ((x+w-tw)//2, y+self.padding))
         if self._right_text:
             if self._right_text_surf is None:
                 self._right_text_surf = self.render_text(self._right_text)
             tw, th = self._right_text_surf.get_size()
             dest_surf.blit(self._right_text_surf, (x+w-tw-self.padding, y+self.padding))
-        if self._text:
-            if self._text_surf is None:
-                self._text_surf = self.render_text(self._text)
-            dest_surf.blit(self._text_surf, (x+self.padding, y+self.padding))
+        if self._left_text:
+            if self._left_text_surf is None:
+                self._left_text_surf = self.render_text(self._left_text)
+            dest_surf.blit(self._left_text_surf, (x+self.padding, y+self.padding))
 
 
 class MainGameModule(BaseModule):
@@ -482,6 +499,7 @@ class MainGameModule(BaseModule):
         self.path_step = 1
         self.time_controller = TimeController()
         self.speed_changed = True
+        self.mode_changed = True
         self.state_advance_timer = Timer(self.time_controller.time)
         self.screen = None
         self.background = None
@@ -540,8 +558,10 @@ class MainGameModule(BaseModule):
         elif e.type == pygame.KEYDOWN:
             if e.key == pygame.K_r:
                 self.path_step = -self.path_step
+                self.mode_changed = True
             elif e.key == pygame.K_SPACE:
                 self.state_advance_timer.toggle()
+                self.mode_changed = True
             elif e.key == pygame.K_PLUS:
                 self.time_controller.change_speed(1)
                 self.speed_changed = True
@@ -554,12 +574,12 @@ class MainGameModule(BaseModule):
             old_state, old_move = self.path[self.path_index]
             new_index = self.path_index + self.path_step
             if new_index not in range(len(self.path)):
-                self.bar.text = None
+                self.bar.left_text = None
                 break
             self.path_index = new_index
             new_state, move = self.path[new_index]
 
-            self.bar.text = move if self.path_step > 0 else old_move
+            self.bar.left_text = move if self.path_step > 0 else old_move
 
             if new_state.pos != old_state.pos:
                 self.vacuum.pos = new_state.pos
@@ -569,6 +589,15 @@ class MainGameModule(BaseModule):
                     if d != old_state.dirt[y, x]:
                         self.dirt[(x, y)].level = d
                         self.vacuum.clean()
+
+        if self.mode_changed:
+            if not self.state_advance_timer.running():
+                self.bar.center_text = "* Paused *"
+            elif self.path_step > 0:
+                self.bar.center_text = "Playing"
+            else:
+                self.bar.center_text = "Rewinding"
+            self.mode_changed = False
 
         if self.speed_changed:
             speed = self.time_controller.speed
