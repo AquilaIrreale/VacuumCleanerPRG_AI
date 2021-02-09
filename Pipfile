@@ -4,12 +4,10 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
-dvc = {extras = ["gdrive"], version = "*"}
 
 [packages]
 numpy = "*"
 opencv-python = "*"
-imutils = "*"
 pygame = "*"
 tensorflow = "*"
 matplotlib = "*"

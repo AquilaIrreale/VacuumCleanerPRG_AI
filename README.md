@@ -1,4 +1,4 @@
-# VacuumCleanerPRG_AI
+# VacuumCleanerPRG\_AI
 
 ## Preparations
 Install on your system
@@ -7,15 +7,11 @@ Install on your system
 
 Then run
 ```
-$ pipenv install --dev
+$ pipenv install
 ```
 to install the correct versions of the required libraries locally.
 
 ## Running
-```
-$ pipenv run dvc pull -r myremote
-```
-to collect dataset from dvc remote directory
 ```
 $ pipenv run python vision.py train dataset_path model_dir
 ```
@@ -23,7 +19,7 @@ to train the model with a specific dataset
 ```
 $ pipenv run python vision.py predict model_path image_path
 ```
-to predict a single image 
+to predict a single image
 ```
 $ pipenv run python vision.py read-board model_path image_path
 ```
