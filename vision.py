@@ -8,6 +8,8 @@ from pathlib import Path
 from statistics import mean
 from itertools import product, count
 from contextlib import redirect_stdout
+from tempfile import NamedTemporaryFile
+from zipfile import ZipFile
 
 import cv2
 import numpy as np
@@ -129,7 +131,10 @@ class LetterRecognizerNN:
 
         if model_path is not None:
             model_path = Path(model_path)
-            self.model.save(model_path)
+            with NamedTemporaryFile(suffix=".keras") as tmp_zip:
+                self.model.save(tmp_zip.name)
+                with ZipFile(tmp_zip) as f:
+                    f.extractall(path=model_path)
             write_labels(model_path/"classes", self.labels)
 
         score = self.model.evaluate(test_imgs, test_labels, verbose=0)
